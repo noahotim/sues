@@ -1,0 +1,373 @@
+import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { CheckSquare, CheckCircle2, Vote, Clock, AlertCircle } from "lucide-react";
+import { useAuth } from "../lib/auth";
+import {
+  loadElections,
+  loadPositions,
+  loadCandidates,
+  loadVoterRoster,
+  submitBallot,
+  hasUserVotedForPosition,
+  type Election,
+  type Position,
+  type Candidate,
+  type VoterRosterEntry,
+} from "../lib/services";
+import {
+  Card,
+  Button,
+  Badge,
+  LoadingState,
+  ErrorState,
+  EmptyState,
+  Spinner,
+} from "../components/ui";
+
+export default function VotePage() {
+  const { session, profile, permissions, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+  const [elections, setElections] = useState<Election[]>([]);
+  const [selectedElectionId, setSelectedElectionId] = useState("");
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [roster, setRoster] = useState<VoterRosterEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [selections, setSelections] = useState<Record<string, string>>({});
+  const [votedPositions, setVotedPositions] = useState<Set<string>>(new Set());
+  const [submittingPos, setSubmittingPos] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const canVote = permissions.includes("VOTE");
+
+  useEffect(() => {
+    if (!authLoading && !session) {
+      navigate("/login", { replace: true });
+    }
+  }, [authLoading, session, navigate]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const data = await loadElections();
+      const active = data.filter((e) => e.status === "active");
+      setElections(active);
+      if (active.length > 0 && !selectedElectionId) {
+        setSelectedElectionId(active[0].id);
+      }
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedElectionId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!selectedElectionId || !session) {
+      setPositions([]);
+      setCandidates([]);
+      setRoster([]);
+      return;
+    }
+    (async () => {
+      try {
+        const [pos, cand, ros] = await Promise.all([
+          loadPositions(selectedElectionId),
+          loadCandidates(selectedElectionId),
+          loadVoterRoster(selectedElectionId),
+        ]);
+        setPositions(pos);
+        setCandidates(cand);
+        setRoster(ros);
+
+        // Check which positions the user has already voted for
+        const voted = new Set<string>();
+        for (const p of pos) {
+          const hasVoted = await hasUserVotedForPosition(selectedElectionId, p.id, session.user.id);
+          if (hasVoted) voted.add(p.id);
+        }
+        setVotedPositions(voted);
+      } catch {
+        setPositions([]);
+        setCandidates([]);
+        setRoster([]);
+      }
+    })();
+  }, [selectedElectionId, session]);
+
+  const isEligible =
+    profile && roster.some((r) => r.voter_email.toLowerCase() === profile.email.toLowerCase());
+
+  async function handleSubmitVote(positionId: string) {
+    if (!session || !selectedElectionId) return;
+    const candidateId = selections[positionId];
+    if (!candidateId) return;
+
+    setSubmittingPos(positionId);
+    setSubmitError(null);
+    try {
+      await submitBallot(selectedElectionId, positionId, candidateId);
+      setVotedPositions((prev) => new Set(prev).add(positionId));
+      setSelections((prev) => {
+        const next = { ...prev };
+        delete next[positionId];
+        return next;
+      });
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Failed to submit vote");
+    } finally {
+      setSubmittingPos(null);
+    }
+  }
+
+  if (authLoading || loading) return <LoadingState message="Loading ballot..." />;
+  if (error) return <ErrorState message="We could not load the voting interface." onRetry={load} />;
+
+  if (!canVote) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="p-8 max-w-md text-center">
+          <AlertCircle size={40} className="text-warning-500 mx-auto mb-4" />
+          <h2 className="text-lg font-semibold text-slate-900 mb-2">Voting Not Available</h2>
+          <p className="text-sm text-slate-500">
+            Your current role does not include voting privileges.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
+  if (elections.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+        <Card className="p-8 max-w-md text-center">
+          <EmptyState
+            icon={<Vote size={48} />}
+            title="No active elections"
+            message="There are no elections currently open for voting. Please check back later."
+          />
+        </Card>
+      </div>
+    );
+  }
+
+  const selectedElection = elections.find((e) => e.id === selectedElectionId);
+
+  return (
+    <div className="min-h-screen bg-slate-50 py-8 px-4">
+      <div className="max-w-3xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="text-center">
+          <div className="w-14 h-14 rounded-2xl bg-primary-600 flex items-center justify-center shadow-lg shadow-primary-600/20 mx-auto mb-4">
+            <Vote size={28} className="text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900">Cast Your Vote</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Your vote is confidential and securely recorded.
+          </p>
+        </div>
+
+        {/* Election selector */}
+        {elections.length > 1 && (
+          <Card className="p-4">
+            <label className="block text-sm font-medium text-slate-700 mb-2">Select Election</label>
+            <select
+              value={selectedElectionId}
+              onChange={(e) => setSelectedElectionId(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              {elections.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.title}
+                </option>
+              ))}
+            </select>
+          </Card>
+        )}
+
+        {/* Eligibility check */}
+        {selectedElectionId && !isEligible && (
+          <Card className="p-5 border-warning-200 bg-warning-50">
+            <div className="flex items-start gap-3">
+              <AlertCircle size={20} className="text-warning-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-warning-700">You are not on the voter roster</p>
+                <p className="text-xs text-warning-600 mt-1">
+                  You are not registered as an eligible voter for this election. Contact an administrator if you believe this is an error.
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Election info */}
+        {selectedElection && (
+          <Card className="p-5">
+            <h2 className="text-lg font-semibold text-slate-900">{selectedElection.title}</h2>
+            {selectedElection.description && (
+              <p className="text-sm text-slate-500 mt-1">{selectedElection.description}</p>
+            )}
+            <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
+              {selectedElection.start_time && (
+                <span className="flex items-center gap-1">
+                  <Clock size={14} />
+                  Started: {new Date(selectedElection.start_time).toLocaleString()}
+                </span>
+              )}
+              {selectedElection.end_time && (
+                <span className="flex items-center gap-1">
+                  <Clock size={14} />
+                  Ends: {new Date(selectedElection.end_time).toLocaleString()}
+                </span>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {/* Submit error */}
+        {submitError && (
+          <div className="text-sm text-error-600 bg-error-50 border border-error-200 rounded-lg px-4 py-3 flex items-center gap-2">
+            <AlertCircle size={16} />
+            {submitError}
+          </div>
+        )}
+
+        {/* Ballot positions */}
+        {isEligible && positions.length === 0 ? (
+          <Card className="p-6">
+            <EmptyState
+              icon={<CheckSquare size={48} />}
+              title="No positions to vote on"
+              message="This election has no configured positions yet."
+            />
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            {positions.map((position, idx) => {
+              const positionCandidates = candidates.filter((c) => c.position_id === position.id);
+              const hasVoted = votedPositions.has(position.id);
+              const selected = selections[position.id];
+
+              return (
+                <Card key={position.id} className="p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-primary-600">
+                          Position {idx + 1}
+                        </span>
+                        {hasVoted && (
+                          <Badge variant="success">
+                            <CheckCircle2 size={12} className="mr-1" />
+                            Voted
+                          </Badge>
+                        )}
+                      </div>
+                      <h3 className="font-semibold text-slate-900 mt-1">{position.title}</h3>
+                      {position.description && (
+                        <p className="text-xs text-slate-500 mt-0.5">{position.description}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {hasVoted ? (
+                    <div className="bg-success-50 border border-success-200 rounded-lg p-4 text-center">
+                      <CheckCircle2 size={24} className="text-success-600 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-success-700">
+                        Your vote has been recorded for this position.
+                      </p>
+                    </div>
+                  ) : positionCandidates.length === 0 ? (
+                    <p className="text-sm text-slate-500 py-4 text-center">
+                      No candidates for this position.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        {positionCandidates.map((cand) => (
+                          <label
+                            key={cand.id}
+                            className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                              selected === cand.id
+                                ? "border-primary-500 bg-primary-50"
+                                : "border-slate-200 hover:border-slate-300"
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name={`position-${position.id}`}
+                              value={cand.id}
+                              checked={selected === cand.id}
+                              onChange={() =>
+                                setSelections((prev) => ({ ...prev, [position.id]: cand.id }))
+                              }
+                              className="mt-1 accent-primary-600"
+                            />
+                            {cand.photo_url ? (
+                              <img
+                                src={cand.photo_url}
+                                alt={cand.name}
+                                className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
+                                <span className="text-primary-600 font-semibold text-sm">
+                                  {cand.name.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                            )}
+                            <div className="flex-1">
+                              <p className="font-medium text-slate-900 text-sm">{cand.name}</p>
+                              {cand.bio && (
+                                <p className="text-xs text-slate-500 mt-0.5">{cand.bio}</p>
+                              )}
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                      <div className="mt-4 flex justify-end">
+                        <Button
+                          onClick={() => handleSubmitVote(position.id)}
+                          disabled={!selected || submittingPos === position.id}
+                        >
+                          {submittingPos === position.id ? (
+                            <>
+                              <Spinner className="text-white" size={16} />
+                              Submitting...
+                            </>
+                          ) : (
+                            <>
+                              <CheckSquare size={16} />
+                              Submit Vote
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {/* All voted confirmation */}
+        {isEligible && positions.length > 0 && votedPositions.size === positions.length && (
+          <Card className="p-6 text-center bg-success-50 border-success-200">
+            <CheckCircle2 size={40} className="text-success-600 mx-auto mb-3" />
+            <h3 className="text-lg font-semibold text-success-700">All Votes Submitted</h3>
+            <p className="text-sm text-success-600 mt-1">
+              You have voted on all positions in this election. Thank you for participating!
+            </p>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}

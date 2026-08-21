@@ -1,0 +1,105 @@
+import { useEffect, useState, useCallback } from "react";
+import { ScrollText } from "lucide-react";
+import { loadAuditLogs, type AuditLog } from "../lib/services";
+import {
+  Card,
+  LoadingState,
+  ErrorState,
+  EmptyState,
+  Badge,
+} from "../components/ui";
+
+export default function AuditLogsPage() {
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const data = await loadAuditLogs(200);
+      setLogs(data);
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  function formatAction(action: string): string {
+    return action
+      .toLowerCase()
+      .split("_")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  }
+
+  function formatTime(ts: string): string {
+    const date = new Date(ts);
+    return date.toLocaleString();
+  }
+
+  if (loading) return <LoadingState message="Loading audit logs..." />;
+  if (error) return <ErrorState message="We could not load the audit logs." onRetry={load} />;
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Audit Logs</h1>
+        <p className="text-sm text-slate-500 mt-1">
+          A chronological record of all privileged operations performed in the system.
+        </p>
+      </div>
+
+      {logs.length === 0 ? (
+        <Card className="p-6">
+          <EmptyState
+            icon={<ScrollText size={48} />}
+            title="No audit entries yet"
+            message="Audit log entries will appear here as privileged operations are performed."
+          />
+        </Card>
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr className="text-left text-slate-600">
+                  <th className="px-4 py-3 font-medium">Time</th>
+                  <th className="px-4 py-3 font-medium">User</th>
+                  <th className="px-4 py-3 font-medium">Action</th>
+                  <th className="px-4 py-3 font-medium">Entity</th>
+                  <th className="px-4 py-3 font-medium">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((log) => (
+                  <tr key={log.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3 text-slate-500 whitespace-nowrap text-xs">
+                      {formatTime(log.created_at)}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700 font-medium">{log.user_email || "—"}</td>
+                    <td className="px-4 py-3">
+                      <Badge variant="primary">{formatAction(log.action)}</Badge>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{log.entity_type || "—"}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">
+                      {Object.keys(log.details).length > 0
+                        ? JSON.stringify(log.details)
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
