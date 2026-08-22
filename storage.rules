@@ -1,0 +1,26 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function hasRole(role) {
+      return isAuthenticated() && request.auth.token.role == role;
+    }
+    
+    function isElectionManager() {
+      return hasRole('ROLE_CHAIRPERSON') || hasRole('ROLE_SECRETARY');
+    }
+
+    match /{allPaths=**} {
+      // Anyone authenticated can view images
+      allow read: if isAuthenticated();
+      // Only election managers can upload/delete candidate photos
+      allow write: if isElectionManager()
+                   // Ensure it's an image and reasonable size (e.g. < 5MB)
+                   && (request.resource == null || (request.resource.size < 5 * 1024 * 1024 && request.resource.contentType.matches('image/.*')));
+    }
+  }
+}

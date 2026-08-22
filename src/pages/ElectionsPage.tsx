@@ -2,17 +2,17 @@ import { useEffect, useState, useCallback } from "react";
 import { Plus, Vote, Settings, Trash2, Calendar } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import {
-  loadElections,
-  createElection,
-  updateElection,
-  deleteElection,
-  loadPositions,
-  createPosition,
-  deletePosition,
+  electionService,
   type Election,
   type Position,
-} from "../lib/services";
-import { ELECTION_STATUS } from "../lib/supabase";
+} from "../services";
+
+const ELECTION_STATUS = {
+  DRAFT: "draft",
+  ACTIVE: "active",
+  CLOSED: "closed",
+  PUBLISHED: "published",
+};
 import {
   Card,
   Button,
@@ -47,8 +47,8 @@ export default function ElectionsPage() {
     setLoading(true);
     setError(false);
     try {
-      const data = await loadElections();
-      setElections(data);
+      const { data } = await electionService.getElections();
+      if (data) setElections(data);
     } catch {
       setError(true);
     } finally {
@@ -63,9 +63,11 @@ export default function ElectionsPage() {
   async function handleCreate() {
     setSubmitting(true);
     try {
-      await createElection({
+      await electionService.createElection({
         title,
         description,
+        status: "draft",
+        results_published: false,
         start_time: startTime ? new Date(startTime).toISOString() : null,
         end_time: endTime ? new Date(endTime).toISOString() : null,
       });
@@ -84,7 +86,7 @@ export default function ElectionsPage() {
 
   async function handleStatusChange(election: Election, newStatus: string) {
     try {
-      await updateElection(election.id, { status: newStatus });
+      await electionService.updateElection(election.id, { status: newStatus as any });
       await load();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to update election");
@@ -94,7 +96,7 @@ export default function ElectionsPage() {
   async function handleDelete() {
     if (!deleteTarget) return;
     try {
-      await deleteElection(deleteTarget.id);
+      await electionService.deleteElection(deleteTarget.id);
       await load();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to delete election");
@@ -285,8 +287,8 @@ function PositionsModal({
   async function loadPos() {
     setLoading(true);
     try {
-      const data = await loadPositions(election.id);
-      setPositions(data);
+      const { data } = await electionService.getPositions(election.id);
+      if (data) setPositions(data);
     } catch {
       setPositions([]);
     } finally {
@@ -301,7 +303,7 @@ function PositionsModal({
   async function handleAdd() {
     setSubmitting(true);
     try {
-      await createPosition({
+      await electionService.createPosition({
         election_id: election.id,
         title,
         description,
@@ -322,7 +324,7 @@ function PositionsModal({
 
   async function handleDeletePos(id: string) {
     try {
-      await deletePosition(id);
+      await electionService.deletePosition(id);
       await loadPos();
       onSaved();
     } catch (err) {

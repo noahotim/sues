@@ -2,14 +2,11 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { Plus, Upload, Trash2, Search, ClipboardCheck, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import {
-  loadElections,
-  loadVoterRoster,
-  addVoterToRoster,
-  bulkAddVoters,
-  deleteVoterFromRoster,
+  electionService,
+  rosterService,
   type Election,
   type VoterRosterEntry,
-} from "../lib/services";
+} from "../services";
 import {
   Card,
   Button,
@@ -49,10 +46,12 @@ export default function RosterPage() {
     setLoading(true);
     setError(false);
     try {
-      const data = await loadElections();
-      setElections(data);
-      if (data.length > 0 && !selectedElectionId) {
-        setSelectedElectionId(data[0].id);
+      const { data } = await electionService.getElections();
+      if (data) {
+        setElections(data);
+        if (data.length > 0 && !selectedElectionId) {
+          setSelectedElectionId(data[0].id);
+        }
       }
     } catch {
       setError(true);
@@ -72,8 +71,8 @@ export default function RosterPage() {
     }
     (async () => {
       try {
-        const data = await loadVoterRoster(selectedElectionId);
-        setRoster(data);
+        const { data } = await rosterService.getRoster(selectedElectionId);
+        if (data) setRoster(data);
       } catch {
         setRoster([]);
       }
@@ -83,7 +82,7 @@ export default function RosterPage() {
   async function handleAdd() {
     setSubmitting(true);
     try {
-      await addVoterToRoster({
+      await rosterService.addVoter({
         election_id: selectedElectionId,
         voter_email: voterEmail,
         voter_name: voterName,
@@ -91,8 +90,8 @@ export default function RosterPage() {
       setShowAdd(false);
       setVoterEmail("");
       setVoterName("");
-      const data = await loadVoterRoster(selectedElectionId);
-      setRoster(data);
+      const { data } = await rosterService.getRoster(selectedElectionId);
+      if (data) setRoster(data);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to add voter");
     } finally {
@@ -100,18 +99,18 @@ export default function RosterPage() {
     }
   }
 
-  function parseCsv(text: string): { voter_email: string; voter_name: string }[] {
+  function parseCsv(text: string): { email: string; name: string }[] {
     const lines = text.trim().split("\n");
     if (lines.length === 0) return [];
-    const result: { voter_email: string; voter_name: string }[] = [];
+    const result: { email: string; name: string }[] = [];
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
       const parts = line.split(",").map((p) => p.trim());
       if (parts.length >= 1 && parts[0].includes("@")) {
         result.push({
-          voter_email: parts[0],
-          voter_name: parts.length >= 2 ? parts[1] : "",
+          email: parts[0],
+          name: parts.length >= 2 ? parts[1] : "",
         });
       }
     }
@@ -128,10 +127,12 @@ export default function RosterPage() {
         setSubmitting(false);
         return;
       }
-      const result = await bulkAddVoters(selectedElectionId, voters);
-      setImportResult(result);
-      const data = await loadVoterRoster(selectedElectionId);
-      setRoster(data);
+      const result = await rosterService.bulkUploadRoster(selectedElectionId, voters);
+      if (result.data) {
+        setImportResult({ inserted: voters.length, errors: [] });
+      }
+      const { data } = await rosterService.getRoster(selectedElectionId);
+      if (data) setRoster(data);
     } catch (err) {
       setImportResult({ inserted: 0, errors: [err instanceof Error ? err.message : "Import failed"] });
     } finally {
@@ -142,9 +143,9 @@ export default function RosterPage() {
   async function handleDelete() {
     if (!deleteTarget) return;
     try {
-      await deleteVoterFromRoster(deleteTarget.id);
-      const data = await loadVoterRoster(selectedElectionId);
-      setRoster(data);
+      await rosterService.removeVoter(deleteTarget.id);
+      const { data } = await rosterService.getRoster(selectedElectionId);
+      if (data) setRoster(data);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to delete voter");
     }

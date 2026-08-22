@@ -9,11 +9,11 @@ import {
 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import {
-  loadDashboardMetrics,
-  loadElections,
+  dashboardService,
+  electionService,
   type DashboardMetrics,
   type Election,
-} from "../lib/services";
+} from "../services";
 import { Card, LoadingState, ErrorState, Badge } from "../components/ui";
 
 export default function DashboardPage() {
@@ -27,9 +27,10 @@ export default function DashboardPage() {
     setLoading(true);
     setError(false);
     try {
-      const [m, e] = await Promise.all([loadDashboardMetrics(), loadElections()]);
+      const m = await dashboardService.loadDashboardMetrics();
+      const { data: e } = await electionService.getElections();
       setMetrics(m);
-      setElections(e);
+      if (e) setElections(e);
     } catch {
       setError(true);
     } finally {

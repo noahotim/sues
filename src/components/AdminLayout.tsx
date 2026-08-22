@@ -3,15 +3,15 @@ import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import * as LucideIcons from "lucide-react";
 import type { ComponentType } from "react";
 import { useAuth } from "../lib/auth";
-import { loadNavigationItems, type NavigationItem } from "../lib/services";
-import { signOut } from "../lib/services";
+import { authService } from "../services";
+import { NAVIGATION_ITEMS } from "../lib/constants";
 import { Spinner } from "./ui";
 
 export default function AdminLayout() {
   const { session, profile, role, permissions, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [navItems, setNavItems] = useState<NavigationItem[]>([]);
+  const [navItems, setNavItems] = useState<typeof NAVIGATION_ITEMS>([]);
   const [navLoading, setNavLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -22,22 +22,22 @@ export default function AdminLayout() {
   }, [loading, session, navigate]);
 
   useEffect(() => {
-    if (session) {
-      (async () => {
-        try {
-          const items = await loadNavigationItems();
-          setNavItems(items);
-        } catch {
-          setNavItems([]);
-        } finally {
-          setNavLoading(false);
-        }
-      })();
+    async function fetchNav() {
+      if (permissions.length > 0) {
+        const filteredNav = NAVIGATION_ITEMS.filter((item) =>
+          !item.permission_id || permissions.includes(item.permission_id)
+        );
+        setNavItems(filteredNav);
+      } else {
+        setNavItems([]);
+      }
+      setNavLoading(false);
     }
-  }, [session]);
+    fetchNav();
+  }, [permissions]);
 
   async function handleSignOut() {
-    await signOut();
+    const { error } = await authService.signOut();
     navigate("/login", { replace: true });
   }
 

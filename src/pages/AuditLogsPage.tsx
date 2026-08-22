@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { ScrollText } from "lucide-react";
-import { loadAuditLogs, type AuditLog } from "../lib/services";
+import { auditService, type AuditLog } from "../services";
 import {
   Card,
   LoadingState,
@@ -18,8 +18,8 @@ export default function AuditLogsPage() {
     setLoading(true);
     setError(false);
     try {
-      const data = await loadAuditLogs(200);
-      setLogs(data);
+      const { data } = await auditService.getAuditLogs();
+      if (data) setLogs(data);
     } catch {
       setError(true);
     } finally {

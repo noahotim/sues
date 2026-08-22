@@ -3,17 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { CheckSquare, CheckCircle2, Vote, Clock, AlertCircle } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import {
-  loadElections,
-  loadPositions,
-  loadCandidates,
-  loadVoterRoster,
-  submitBallot,
-  hasUserVotedForPosition,
+  electionService,
+  candidateService,
+  rosterService,
+  voteService,
   type Election,
   type Position,
   type Candidate,
   type VoterRosterEntry,
-} from "../lib/services";
+} from "../services";
 import {
   Card,
   Button,
@@ -51,11 +49,13 @@ export default function VotePage() {
     setLoading(true);
     setError(false);
     try {
-      const data = await loadElections();
-      const active = data.filter((e) => e.status === "active");
-      setElections(active);
-      if (active.length > 0 && !selectedElectionId) {
-        setSelectedElectionId(active[0].id);
+      const { data } = await electionService.getElections();
+      if (data) {
+        const active = data.filter((e) => e.status === "active");
+        setElections(active);
+        if (active.length > 0 && !selectedElectionId) {
+          setSelectedElectionId(active[0].id);
+        }
       }
     } catch {
       setError(true);
@@ -77,19 +77,20 @@ export default function VotePage() {
     }
     (async () => {
       try {
-        const [pos, cand, ros] = await Promise.all([
-          loadPositions(selectedElectionId),
-          loadCandidates(selectedElectionId),
-          loadVoterRoster(selectedElectionId),
+        const [posRes, candRes, rosRes] = await Promise.all([
+          electionService.getPositions(selectedElectionId),
+          candidateService.getCandidates(selectedElectionId),
+          rosterService.getRoster(selectedElectionId),
         ]);
+        const pos = posRes.data || [];
         setPositions(pos);
-        setCandidates(cand);
-        setRoster(ros);
+        setCandidates(candRes.data || []);
+        setRoster(rosRes.data || []);
 
         // Check which positions the user has already voted for
         const voted = new Set<string>();
         for (const p of pos) {
-          const hasVoted = await hasUserVotedForPosition(selectedElectionId, p.id, session.user.id);
+          const hasVoted = await voteService.hasUserVotedForPosition(selectedElectionId, p.id, session.user.id);
           if (hasVoted) voted.add(p.id);
         }
         setVotedPositions(voted);
@@ -112,7 +113,7 @@ export default function VotePage() {
     setSubmittingPos(positionId);
     setSubmitError(null);
     try {
-      await submitBallot(selectedElectionId, positionId, candidateId);
+      await voteService.submitVote(selectedElectionId, positionId, candidateId);
       setVotedPositions((prev) => new Set(prev).add(positionId));
       setSelections((prev) => {
         const next = { ...prev };

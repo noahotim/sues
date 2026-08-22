@@ -2,15 +2,12 @@ import { useEffect, useState, useCallback } from "react";
 import { Plus, Users, Trash2 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import {
-  loadElections,
-  loadPositions,
-  loadCandidates,
-  createCandidate,
-  deleteCandidate,
+  electionService,
+  candidateService,
   type Election,
   type Position,
   type Candidate,
-} from "../lib/services";
+} from "../services";
 import {
   Card,
   Button,
@@ -48,10 +45,12 @@ export default function CandidatesPage() {
     setLoading(true);
     setError(false);
     try {
-      const data = await loadElections();
-      setElections(data);
-      if (data.length > 0 && !selectedElectionId) {
-        setSelectedElectionId(data[0].id);
+      const { data } = await electionService.getElections();
+      if (data) {
+        setElections(data);
+        if (data.length > 0 && !selectedElectionId) {
+          setSelectedElectionId(data[0].id);
+        }
       }
     } catch {
       setError(true);
@@ -72,12 +71,12 @@ export default function CandidatesPage() {
     }
     (async () => {
       try {
-        const [pos, cand] = await Promise.all([
-          loadPositions(selectedElectionId),
-          loadCandidates(selectedElectionId),
+        const [posRes, candRes] = await Promise.all([
+          electionService.getPositions(selectedElectionId),
+          candidateService.getCandidates(selectedElectionId),
         ]);
-        setPositions(pos);
-        setCandidates(cand);
+        if (posRes.data) setPositions(posRes.data);
+        if (candRes.data) setCandidates(candRes.data);
       } catch {
         setPositions([]);
         setCandidates([]);
@@ -88,7 +87,7 @@ export default function CandidatesPage() {
   async function handleAdd() {
     setSubmitting(true);
     try {
-      await createCandidate({
+      await candidateService.createCandidate({
         election_id: selectedElectionId,
         position_id: positionId,
         name,
@@ -101,8 +100,8 @@ export default function CandidatesPage() {
       setBio("");
       setPhotoUrl("");
       setPositionId("");
-      const cand = await loadCandidates(selectedElectionId);
-      setCandidates(cand);
+      const candRes = await candidateService.getCandidates(selectedElectionId);
+      if (candRes.data) setCandidates(candRes.data);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to add candidate");
     } finally {
@@ -113,9 +112,9 @@ export default function CandidatesPage() {
   async function handleDelete() {
     if (!deleteTarget) return;
     try {
-      await deleteCandidate(deleteTarget.id);
-      const cand = await loadCandidates(selectedElectionId);
-      setCandidates(cand);
+      await candidateService.deleteCandidate(deleteTarget.id);
+      const candRes = await candidateService.getCandidates(selectedElectionId);
+      if (candRes.data) setCandidates(candRes.data);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to delete candidate");
     }

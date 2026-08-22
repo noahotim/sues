@@ -1,13 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { ShieldCheck, Search } from "lucide-react";
 import { useAuth } from "../lib/auth";
-import {
-  loadAllProfiles,
-  loadRoleDefinitions,
-  updateUserRole,
-  type Profile,
-  type RoleDefinition,
-} from "../lib/services";
+import { authService, type UserProfile as Profile } from "../services";
+import { ROLES } from "../lib/constants";
 import {
   Card,
   Badge,
@@ -19,7 +14,7 @@ import {
 export default function UsersPage() {
   const { profile: currentUser } = useAuth();
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [roles, setRoles] = useState<RoleDefinition[]>([]);
+  const roles = ROLES;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [search, setSearch] = useState("");
@@ -29,9 +24,8 @@ export default function UsersPage() {
     setLoading(true);
     setError(false);
     try {
-      const [p, r] = await Promise.all([loadAllProfiles(), loadRoleDefinitions()]);
-      setProfiles(p);
-      setRoles(r);
+      const { data: p } = await authService.getAllProfiles();
+      if (p) setProfiles(p);
     } catch {
       setError(true);
     } finally {
@@ -46,9 +40,9 @@ export default function UsersPage() {
   async function handleRoleChange(userId: string, newRoleId: string) {
     setUpdating(userId);
     try {
-      await updateUserRole(userId, newRoleId);
-      const p = await loadAllProfiles();
-      setProfiles(p);
+      await authService.updateUserRole(userId, newRoleId);
+      const { data: p } = await authService.getAllProfiles();
+      if (p) setProfiles(p);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to update role");
     } finally {

@@ -1,0 +1,93 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function hasRole(role) {
+      return isAuthenticated() && request.auth.token.role == role;
+    }
+    
+    function isChairperson() {
+      return hasRole('ROLE_CHAIRPERSON');
+    }
+    
+    function isSecretary() {
+      return hasRole('ROLE_SECRETARY');
+    }
+    
+    function isAssistant() {
+      return hasRole('ROLE_ASSISTANT');
+    }
+    
+    function isVoter() {
+      return hasRole('VOTER');
+    }
+    
+    function isAdmin() {
+      return isChairperson() || isSecretary() || isAssistant();
+    }
+    
+    function isElectionManager() {
+      return isChairperson() || isSecretary();
+    }
+
+    // Profiles (Users)
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      // Updates to role or sensitive info happen via Cloud Functions
+      allow update: if isAuthenticated() && request.auth.uid == userId 
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName']);
+    }
+
+    // Elections
+    match /elections/{electionId} {
+      // Voters can read active, closed, or published elections
+      allow read: if isAuthenticated() && 
+                  (isAdmin() || resource.data.status in ['active', 'closed', 'published']);
+      allow write: if isElectionManager();
+    }
+
+    // Positions
+    match /positions/{positionId} {
+      // Voters can read positions if the parent election is visible to them
+      allow read: if isAuthenticated() && 
+                  (isAdmin() || 
+                    get(/databases/$(database)/documents/elections/$(resource.data.electionId)).data.status in ['active', 'closed', 'published']);
+      allow write: if isElectionManager();
+    }
+
+    // Candidates
+    match /candidates/{candidateId} {
+      allow read: if isAuthenticated() && 
+                  (isAdmin() || 
+                    get(/databases/$(database)/documents/elections/$(resource.data.electionId)).data.status in ['active', 'closed', 'published']);
+      allow write: if isElectionManager();
+    }
+
+    // Voter Roster
+    match /voter_roster/{rosterId} {
+      // Voter can read their own entry. Admins can read all.
+      allow read: if isAuthenticated() && (isAdmin() || resource.data.voterEmail == request.auth.token.email);
+      // Only Chairperson & Secretary can manage roster. Assistant can only read (for verification).
+      allow write: if isElectionManager();
+    }
+
+    // Votes
+    match /votes/{voteId} {
+      // Only admins can read all votes for tallying. Votes do NOT contain voter_id to ensure anonymity.
+      allow read: if isAdmin();
+      // NO ONE can write votes directly from the client. Must use `castVote` Cloud Function.
+      allow write: if false; 
+    }
+
+    // Audit Logs
+    match /audit_logs/{logId} {
+      allow read: if isChairperson(); // Only highest admin sees audit logs
+      allow write: if false; // Written only by Cloud Functions
+    }
+  }
+}

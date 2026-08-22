@@ -1,16 +1,15 @@
 import { useEffect, useState, useCallback } from "react";
 import { BarChart3, Trophy } from "lucide-react";
 import {
-  loadElections,
-  loadPositions,
-  loadCandidates,
-  loadVoterRoster,
-  loadVoteCounts,
+  electionService,
+  candidateService,
+  rosterService,
+  voteService,
   type Election,
   type Position,
   type Candidate,
   type VoterRosterEntry,
-} from "../lib/services";
+} from "../services";
 import {
   Card,
   Badge,
@@ -40,11 +39,12 @@ export default function ResultsPage() {
     setLoading(true);
     setError(false);
     try {
-      const data = await loadElections();
-      // Show all elections for results viewers (including drafts for admins)
-      setElections(data);
-      if (data.length > 0 && !selectedElectionId) {
-        setSelectedElectionId(data[0].id);
+      const { data } = await electionService.getElections();
+      if (data) {
+        setElections(data);
+        if (data.length > 0 && !selectedElectionId) {
+          setSelectedElectionId(data[0].id);
+        }
       }
     } catch {
       setError(true);
@@ -67,16 +67,22 @@ export default function ResultsPage() {
     }
     (async () => {
       try {
-        const [pos, cand, ros, counts] = await Promise.all([
-          loadPositions(selectedElectionId),
-          loadCandidates(selectedElectionId),
-          loadVoterRoster(selectedElectionId),
-          loadVoteCounts(selectedElectionId),
+        const [posRes, candRes, rosRes, votesRes] = await Promise.all([
+          electionService.getPositions(selectedElectionId),
+          candidateService.getCandidates(selectedElectionId),
+          rosterService.getRoster(selectedElectionId),
+          voteService.getVotes(selectedElectionId),
         ]);
-        setPositions(pos);
-        setCandidates(cand);
-        setRoster(ros);
-        setVoteCounts(counts);
+        if (posRes.data) setPositions(posRes.data);
+        if (candRes.data) setCandidates(candRes.data);
+        if (rosRes.data) setRoster(rosRes.data);
+        if (votesRes.data) {
+          const counts: Record<string, number> = {};
+          votesRes.data.forEach(v => {
+            counts[v.candidate_id] = (counts[v.candidate_id] || 0) + 1;
+          });
+          setVoteCounts(counts);
+        }
       } catch {
         setPositions([]);
         setCandidates([]);
