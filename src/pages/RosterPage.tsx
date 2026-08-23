@@ -168,10 +168,11 @@ export default function RosterPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-start justify-between flex-wrap gap-3 mb-8 border-b-2 border-primary-900 pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Voter Roster</h1>
-          <p className="text-sm text-slate-500 mt-1">Manage eligible voters for each election.</p>
+          <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-1">SUES Administration</h2>
+          <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">Voter Roster</h1>
+          <p className="text-sm text-slate-600 mt-2">Manage eligible voters for each election.</p>
         </div>
         {canManage && elections.length > 0 && selectedElectionId && (
           <div className="flex gap-2">
@@ -217,17 +218,17 @@ export default function RosterPage() {
         <>
           {/* Stats */}
           <div className="grid grid-cols-3 gap-4">
-            <Card className="p-4">
-              <p className="text-2xl font-bold text-slate-900">{roster.length}</p>
-              <p className="text-xs text-slate-500 mt-1">Total Eligible</p>
+            <Card className="p-4 rounded-sm shadow-none border-l-4 border-l-slate-400">
+              <p className="text-2xl font-extrabold text-slate-900">{roster.length}</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mt-1">Total Eligible</p>
             </Card>
-            <Card className="p-4">
-              <p className="text-2xl font-bold text-success-600">{votedCount}</p>
-              <p className="text-xs text-slate-500 mt-1">Voted</p>
+            <Card className="p-4 rounded-sm shadow-none border-l-4 border-l-success-600">
+              <p className="text-2xl font-extrabold text-slate-900">{votedCount}</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-success-600 mt-1">Voted</p>
             </Card>
-            <Card className="p-4">
-              <p className="text-2xl font-bold text-primary-600">{roster.length - votedCount}</p>
-              <p className="text-xs text-slate-500 mt-1">Not Voted</p>
+            <Card className="p-4 rounded-sm shadow-none border-l-4 border-l-primary-900">
+              <p className="text-2xl font-extrabold text-slate-900">{roster.length - votedCount}</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-primary-900 mt-1">Not Voted</p>
             </Card>
           </div>
 
@@ -240,7 +241,7 @@ export default function RosterPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by name or email..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                className="w-full pl-10 pr-4 py-2.5 rounded-sm border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900 transition-all"
               />
             </div>
           )}
@@ -267,15 +268,15 @@ export default function RosterPage() {
               <p className="text-sm text-slate-500 text-center py-4">No voters match your search.</p>
             </Card>
           ) : (
-            <Card className="overflow-hidden">
+            <Card className="overflow-hidden rounded-sm shadow-none">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 border-b border-slate-200">
-                    <tr className="text-left text-slate-600">
-                      <th className="px-4 py-3 font-medium">Name</th>
-                      <th className="px-4 py-3 font-medium">Email</th>
-                      <th className="px-4 py-3 font-medium">Status</th>
-                      {canManage && <th className="px-4 py-3 font-medium text-right">Actions</th>}
+                  <thead className="bg-slate-50 border-b-2 border-slate-200">
+                    <tr className="text-left text-slate-500">
+                      <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Name</th>
+                      <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Email</th>
+                      <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Status</th>
+                      {canManage && <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-right">Actions</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -355,7 +356,7 @@ export default function RosterPage() {
               onChange={(e) => setCsvText(e.target.value)}
               placeholder={"voter1@example.com,John Doe\nvoter2@example.com,Jane Smith"}
               rows={8}
-              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all font-mono text-sm resize-none"
+              className="w-full px-3.5 py-2.5 rounded-sm border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900 transition-all font-mono text-sm resize-none"
             />
           </div>
 

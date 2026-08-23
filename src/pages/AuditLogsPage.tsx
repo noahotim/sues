@@ -49,9 +49,10 @@ export default function AuditLogsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Audit Logs</h1>
-        <p className="text-sm text-slate-500 mt-1">
+      <div className="mb-8 border-b-2 border-primary-900 pb-4">
+        <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-1">SUES Administration</h2>
+        <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">Audit Logs</h1>
+        <p className="text-sm text-slate-600 mt-2">
           A chronological record of all privileged operations performed in the system.
         </p>
       </div>
@@ -65,16 +66,16 @@ export default function AuditLogsPage() {
           />
         </Card>
       ) : (
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden rounded-sm shadow-none">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr className="text-left text-slate-600">
-                  <th className="px-4 py-3 font-medium">Time</th>
-                  <th className="px-4 py-3 font-medium">User</th>
-                  <th className="px-4 py-3 font-medium">Action</th>
-                  <th className="px-4 py-3 font-medium">Entity</th>
-                  <th className="px-4 py-3 font-medium">Details</th>
+              <thead className="bg-slate-50 border-b-2 border-slate-200">
+                <tr className="text-left text-slate-500">
+                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Time</th>
+                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">User</th>
+                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Action</th>
+                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Entity</th>
+                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Details</th>
                 </tr>
               </thead>
               <tbody>

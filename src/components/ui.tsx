@@ -63,7 +63,7 @@ export function ErrorState({
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`bg-white rounded-xl border border-slate-200 shadow-sm ${className}`}>
+    <div className={`bg-white rounded-sm border border-slate-200 ${className}`}>
       {children}
     </div>
   );
@@ -85,7 +85,7 @@ export function Badge({
   };
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${variants[variant]}`}
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-sm text-xs font-medium ${variants[variant]}`}
     >
       {children}
     </span>
@@ -110,10 +110,10 @@ export function Button({
   className?: string;
 }) {
   const variants: Record<string, string> = {
-    primary: "bg-primary-600 text-white hover:bg-primary-700 shadow-sm",
-    secondary: "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50",
-    danger: "bg-error-600 text-white hover:bg-error-700 shadow-sm",
-    ghost: "text-slate-600 hover:bg-slate-100",
+    primary: "bg-primary-900 text-white hover:bg-primary-800",
+    secondary: "bg-white text-primary-900 border border-slate-300 hover:bg-slate-50",
+    danger: "bg-error-700 text-white hover:bg-error-800",
+    ghost: "text-primary-900 hover:bg-slate-100",
   };
   const sizes: Record<string, string> = {
     sm: "px-3 py-1.5 text-sm",
@@ -125,7 +125,7 @@ export function Button({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
     >
       {children}
     </button>
@@ -163,8 +163,8 @@ export function Input({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         required={required}
-        className={`w-full px-3.5 py-2.5 rounded-lg border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all ${
-          error ? "border-error-400" : "border-slate-300"
+        className={`w-full px-3.5 py-2.5 rounded-sm border bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900 transition-all ${
+          error ? "border-error-400 focus:border-error-500 focus:ring-error-500" : "border-slate-300"
         }`}
       />
       {error && <p className="text-xs text-error-600">{error}</p>}
@@ -193,7 +193,7 @@ export function Textarea({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         rows={rows}
-        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all resize-none"
+        className="w-full px-3.5 py-2.5 rounded-sm border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900 transition-all resize-none"
       />
     </div>
   );
@@ -226,7 +226,7 @@ export function Select({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
-        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+        className="w-full px-3.5 py-2.5 rounded-sm border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900 transition-all"
       >
         {placeholder && <option value="">{placeholder}</option>}
         {options.map((opt) => (
@@ -260,7 +260,7 @@ export function Modal({
         onClick={onClose}
       />
       <div
-        className={`relative bg-white rounded-xl shadow-2xl w-full ${maxWidth} max-h-[90vh] overflow-y-auto animate-fade-in`}
+        className={`relative bg-white rounded-sm shadow-xl w-full ${maxWidth} max-h-[90vh] overflow-y-auto animate-fade-in`}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <h2 className="text-lg font-semibold text-slate-900">{title}</h2>

@@ -28,21 +28,19 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-white p-4">
       <div className="w-full max-w-md">
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-primary-600 flex items-center justify-center shadow-lg shadow-primary-600/20 mb-4">
-            <Vote size={28} className="text-white" />
+        <div className="flex flex-col items-center mb-10 text-center">
+          <div className="w-12 h-12 bg-primary-900 flex items-center justify-center mb-6 rounded-sm">
+            <Vote size={24} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Election Management System</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Sign in with your Google account
-          </p>
+          <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-2">Soroti University Engineering Society</h2>
+          <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">Elections Portal</h1>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col gap-4">
+        <div className="bg-white border-t-2 border-primary-900 p-8 flex flex-col gap-6 shadow-sm rounded-sm bg-slate-50">
           {error && (
-            <div className="text-sm text-error-600 bg-error-50 border border-error-200 rounded-lg px-3.5 py-2.5">
+            <div className="text-sm text-error-700 bg-error-50 border border-error-200 rounded-sm px-4 py-3">
               {error}
             </div>
           )}

@@ -85,13 +85,7 @@ export default function DashboardPage() {
     },
   ];
 
-  const colorMap: Record<string, string> = {
-    primary: "bg-primary-50 text-primary-600",
-    success: "bg-success-50 text-success-600",
-    accent: "bg-accent-50 text-accent-600",
-    warning: "bg-warning-50 text-warning-600",
-    error: "bg-error-50 text-error-600",
-  };
+
 
   function statusBadge(status: string): React.ReactNode {
     const map: Record<string, { variant: "neutral" | "success" | "warning" | "primary"; label: string }> = {
@@ -106,9 +100,10 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-1">
+      <div className="mb-8 border-b-2 border-primary-900 pb-4">
+        <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-1">SUES Administration</h2>
+        <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">System Overview</h1>
+        <p className="text-sm text-slate-600 mt-2">
           Welcome back{profile?.full_name ? `, ${profile.full_name}` : ""}.
           {role && <span className="ml-1">You are signed in as {role.label}.</span>}
         </p>
@@ -117,19 +112,21 @@ export default function DashboardPage() {
       {/* Metrics grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {statCards.map((stat) => (
-          <Card key={stat.label} className="p-5">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${colorMap[stat.color]}`}>
-              {stat.icon}
+          <Card key={stat.label} className="p-6 border-t-4 border-t-primary-900 flex flex-col justify-between h-32 rounded-sm shadow-none">
+            <div className="flex justify-between items-start mb-2">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{stat.label}</p>
+              <div className="text-slate-400">
+                {stat.icon}
+              </div>
             </div>
-            <p className="text-2xl font-bold text-slate-900">{stat.value}</p>
-            <p className="text-xs text-slate-500 mt-1">{stat.label}</p>
+            <p className="text-3xl font-extrabold text-slate-900 tracking-tight">{stat.value}</p>
           </Card>
         ))}
       </div>
 
       {/* Recent elections */}
-      <Card className="p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Recent Elections</h2>
+      <Card className="p-6 rounded-sm shadow-none">
+        <h2 className="text-lg font-bold text-primary-900 mb-6 uppercase tracking-widest">Recent Elections</h2>
         {elections.length === 0 ? (
           <p className="text-sm text-slate-500 py-8 text-center">
             No elections have been created yet.
@@ -138,11 +135,11 @@ export default function DashboardPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-slate-500 border-b border-slate-200">
-                  <th className="pb-3 font-medium">Title</th>
-                  <th className="pb-3 font-medium">Status</th>
-                  <th className="pb-3 font-medium">Start</th>
-                  <th className="pb-3 font-medium">End</th>
+                <tr className="text-left text-slate-500 border-b-2 border-slate-200">
+                  <th className="pb-3 text-xs font-bold uppercase tracking-wider">Title</th>
+                  <th className="pb-3 text-xs font-bold uppercase tracking-wider">Status</th>
+                  <th className="pb-3 text-xs font-bold uppercase tracking-wider">Start</th>
+                  <th className="pb-3 text-xs font-bold uppercase tracking-wider">End</th>
                 </tr>
               </thead>
               <tbody>

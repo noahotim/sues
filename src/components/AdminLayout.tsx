@@ -37,7 +37,7 @@ export default function AdminLayout() {
   }, [permissions]);
 
   async function handleSignOut() {
-    const { error } = await authService.signOut();
+    await authService.signOut();
     navigate("/login", { replace: true });
   }
 
@@ -74,17 +74,17 @@ export default function AdminLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-slate-900 text-slate-100 flex flex-col z-40 transition-transform duration-300 ${
+        className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-primary-950 text-slate-100 flex flex-col z-40 transition-transform duration-300 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
-        <div className="px-6 py-5 border-b border-slate-700">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-primary-500 flex items-center justify-center">
-              <LucideIcons.Vote size={20} className="text-white" />
+        <div className="px-6 py-5 border-b border-primary-900">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-sm bg-white flex items-center justify-center">
+              <LucideIcons.Vote size={20} className="text-primary-900" />
             </div>
             <div>
-              <h1 className="text-sm font-bold tracking-tight">Election System</h1>
+              <h1 className="text-sm font-bold tracking-widest uppercase">SUES</h1>
               <p className="text-xs text-slate-400">Administration</p>
             </div>
           </div>
@@ -103,10 +103,10 @@ export default function AdminLayout() {
                 key={item.id}
                 to={item.path}
                 onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors border-l-4 ${
                   location.pathname === item.path
-                    ? "bg-primary-600 text-white"
-                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                    ? "border-accent-400 bg-primary-900 text-white"
+                    : "border-transparent text-slate-300 hover:bg-primary-900 hover:text-white"
                 }`}
               >
                 {getIcon(item.icon_name)}
@@ -116,9 +116,9 @@ export default function AdminLayout() {
           )}
         </nav>
 
-        <div className="px-3 py-4 border-t border-slate-700">
+        <div className="px-3 py-4 border-t border-primary-900">
           <div className="px-3 py-2 mb-2">
-            <p className="text-sm font-medium text-white truncate">
+            <p className="text-sm font-bold text-white truncate tracking-wide">
               {profile?.full_name || profile?.email || session.user.email}
             </p>
             {role && (
@@ -127,7 +127,7 @@ export default function AdminLayout() {
           </div>
           <button
             onClick={handleSignOut}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors w-full"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium text-slate-300 hover:bg-primary-900 hover:text-white transition-colors w-full"
           >
             <LucideIcons.LogOut size={20} />
             <span>Sign Out</span>
@@ -146,8 +146,8 @@ export default function AdminLayout() {
             <LucideIcons.Menu size={22} />
           </button>
           <div className="flex items-center gap-2">
-            <LucideIcons.Vote size={18} className="text-primary-600" />
-            <span className="font-semibold text-sm">Election System</span>
+            <LucideIcons.Vote size={18} className="text-primary-900" />
+            <span className="font-bold text-sm tracking-widest uppercase">SUES</span>
           </div>
           <div className="w-10" />
         </header>

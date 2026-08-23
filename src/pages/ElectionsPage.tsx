@@ -119,10 +119,11 @@ export default function ElectionsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-3 mb-8 border-b-2 border-primary-900 pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Elections</h1>
-          <p className="text-sm text-slate-500 mt-1">Create and manage election configurations.</p>
+          <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-1">SUES Administration</h2>
+          <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">Elections</h1>
+          <p className="text-sm text-slate-600 mt-2">Create and manage election configurations.</p>
         </div>
         {canManage && (
           <Button onClick={() => setShowCreate(true)}>
@@ -151,7 +152,7 @@ export default function ElectionsPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {elections.map((election) => (
-            <Card key={election.id} className="p-5 hover:shadow-md transition-shadow">
+            <Card key={election.id} className="p-5 rounded-sm shadow-none border border-slate-200">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-slate-900 truncate">{election.title}</h3>
@@ -182,7 +183,7 @@ export default function ElectionsPage() {
                   <select
                     value={election.status}
                     onChange={(e) => handleStatusChange(election, e.target.value)}
-                    className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="text-xs px-2.5 py-1.5 rounded-sm border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900"
                   >
                     <option value={ELECTION_STATUS.DRAFT}>Draft</option>
                     <option value={ELECTION_STATUS.ACTIVE}>Active</option>
@@ -341,7 +342,7 @@ function PositionsModal({
           {loading ? (
             <LoadingState message="Loading positions..." />
           ) : positions.length === 0 ? (
-            <p className="text-sm text-slate-500 py-4 text-center bg-slate-50 rounded-lg">
+            <p className="text-sm text-slate-500 py-4 text-center bg-slate-50 rounded-sm border border-slate-200">
               No positions configured yet. Add positions below.
             </p>
           ) : (
@@ -349,7 +350,7 @@ function PositionsModal({
               {positions.map((pos, idx) => (
                 <div
                   key={pos.id}
-                  className="flex items-center justify-between bg-slate-50 rounded-lg px-4 py-3"
+                  className="flex items-center justify-between bg-slate-50 rounded-sm border border-slate-200 px-4 py-3"
                 >
                   <div>
                     <span className="text-sm font-medium text-slate-900">

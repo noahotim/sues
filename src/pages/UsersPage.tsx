@@ -74,9 +74,10 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">User Management</h1>
-        <p className="text-sm text-slate-500 mt-1">
+      <div className="mb-8 border-b-2 border-primary-900 pb-4">
+        <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-1">SUES Administration</h2>
+        <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">User Management</h1>
+        <p className="text-sm text-slate-600 mt-2">
           View all users and assign administrative roles.
         </p>
       </div>
@@ -90,7 +91,7 @@ export default function UsersPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name or email..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+            className="w-full pl-10 pr-4 py-2.5 rounded-sm border border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900 transition-all"
           />
         </div>
       )}
@@ -108,15 +109,15 @@ export default function UsersPage() {
           <p className="text-sm text-slate-500 text-center py-4">No users match your search.</p>
         </Card>
       ) : (
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden rounded-sm shadow-none">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr className="text-left text-slate-600">
-                  <th className="px-4 py-3 font-medium">Name</th>
-                  <th className="px-4 py-3 font-medium">Email</th>
-                  <th className="px-4 py-3 font-medium">Current Role</th>
-                  <th className="px-4 py-3 font-medium">Change Role</th>
+              <thead className="bg-slate-50 border-b-2 border-slate-200">
+                <tr className="text-left text-slate-500">
+                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Name</th>
+                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Email</th>
+                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Current Role</th>
+                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Change Role</th>
                 </tr>
               </thead>
               <tbody>
@@ -139,7 +140,7 @@ export default function UsersPage() {
                         value={p.role_id}
                         onChange={(e) => handleRoleChange(p.id, e.target.value)}
                         disabled={updating === p.id || p.id === currentUser?.id}
-                        className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="text-xs px-2.5 py-1.5 rounded-sm border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {roles.map((r) => (
                           <option key={r.id} value={r.id}>
@@ -157,8 +158,8 @@ export default function UsersPage() {
       )}
 
       {/* Role definitions reference */}
-      <Card className="p-5">
-        <h2 className="text-sm font-semibold text-slate-700 mb-3">Role Definitions</h2>
+      <Card className="p-5 rounded-sm shadow-none">
+        <h2 className="text-sm font-bold tracking-widest text-primary-900 uppercase mb-3">Role Definitions</h2>
         <div className="space-y-2">
           {roles.map((r) => (
             <div key={r.id} className="flex items-start gap-3 py-2">

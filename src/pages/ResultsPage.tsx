@@ -133,11 +133,14 @@ export default function ResultsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Election Results</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Results are calculated from actual cast votes and update in real time.
-        </p>
+      <div className="flex items-start justify-between flex-wrap gap-3 mb-8 border-b-2 border-primary-900 pb-4">
+        <div>
+          <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-1">SUES Administration</h2>
+          <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">Election Results</h1>
+          <p className="text-sm text-slate-600 mt-2">
+            Results are calculated from actual cast votes and update in real time.
+          </p>
+        </div>
       </div>
 
       {elections.length > 0 && (
@@ -170,24 +173,24 @@ export default function ResultsPage() {
         <>
           {/* Summary metrics */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="p-5">
-              <p className="text-2xl font-bold text-slate-900">{roster.length}</p>
-              <p className="text-xs text-slate-500 mt-1">Eligible Voters</p>
+            <Card className="p-5 rounded-sm shadow-none border-l-4 border-l-slate-400">
+              <p className="text-3xl font-extrabold text-slate-900 tracking-tight">{roster.length}</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mt-1">Eligible Voters</p>
             </Card>
-            <Card className="p-5">
-              <p className="text-2xl font-bold text-primary-600">{totalVotesCast}</p>
-              <p className="text-xs text-slate-500 mt-1">Votes Cast</p>
+            <Card className="p-5 rounded-sm shadow-none border-l-4 border-l-primary-900">
+              <p className="text-3xl font-extrabold text-primary-900 tracking-tight">{totalVotesCast}</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-primary-900 mt-1">Votes Cast</p>
             </Card>
-            <Card className="p-5">
-              <p className="text-2xl font-bold text-success-600">{turnoutPercentage}%</p>
-              <p className="text-xs text-slate-500 mt-1">Turnout</p>
+            <Card className="p-5 rounded-sm shadow-none border-l-4 border-l-success-600">
+              <p className="text-3xl font-extrabold text-success-600 tracking-tight">{turnoutPercentage}%</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-success-600 mt-1">Turnout</p>
             </Card>
-            <Card className="p-5">
+            <Card className="p-5 rounded-sm shadow-none border-l-4 border-l-slate-900">
               <div className="flex items-center gap-2">
-                <p className="text-2xl font-bold text-slate-900">{positions.length}</p>
+                <p className="text-3xl font-extrabold text-slate-900 tracking-tight">{positions.length}</p>
                 {selectedElection && statusBadge(selectedElection.status)}
               </div>
-              <p className="text-xs text-slate-500 mt-1">Positions</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mt-1">Positions</p>
             </Card>
           </div>
 
@@ -203,12 +206,12 @@ export default function ResultsPage() {
           ) : (
             <div className="space-y-6">
               {positionResults.map(({ position, results, totalVotes }) => (
-                <Card key={position.id} className="p-5">
-                  <div className="flex items-center justify-between mb-4">
+                <Card key={position.id} className="p-5 rounded-sm shadow-none border border-slate-200">
+                  <div className="flex items-center justify-between mb-5 border-b border-slate-100 pb-3">
                     <div>
-                      <h3 className="font-semibold text-slate-900">{position.title}</h3>
+                      <h3 className="text-lg font-bold text-primary-900">{position.title}</h3>
                       {position.description && (
-                        <p className="text-xs text-slate-500 mt-0.5">{position.description}</p>
+                        <p className="text-sm text-slate-600 mt-1">{position.description}</p>
                       )}
                     </div>
                     <Badge variant="neutral">{totalVotes} vote{totalVotes !== 1 ? "s" : ""}</Badge>
@@ -236,12 +239,12 @@ export default function ResultsPage() {
                               </span>
                             </div>
                           </div>
-                          <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="h-3 rounded-sm bg-slate-100 overflow-hidden mt-1">
                             <div
-                              className={`h-full rounded-full transition-all duration-500 ${
+                              className={`h-full transition-all duration-500 ${
                                 idx === 0 && r.votes > 0
-                                  ? "bg-success-500"
-                                  : "bg-primary-500"
+                                  ? "bg-success-600"
+                                  : "bg-primary-900"
                               }`}
                               style={{ width: `${r.percentage}%` }}
                             />

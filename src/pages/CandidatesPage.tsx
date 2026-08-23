@@ -125,10 +125,11 @@ export default function CandidatesPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-3 mb-8 border-b-2 border-primary-900 pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Candidates</h1>
-          <p className="text-sm text-slate-500 mt-1">Manage candidates for each election and position.</p>
+          <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-1">SUES Administration</h2>
+          <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">Candidates</h1>
+          <p className="text-sm text-slate-600 mt-2">Manage candidates for each election and position.</p>
         </div>
         {canManage && elections.length > 0 && (
           <Button onClick={() => setShowAdd(true)} disabled={!selectedElectionId || positions.length === 0}>
@@ -195,9 +196,9 @@ export default function CandidatesPage() {
             const positionCandidates = candidates.filter((c) => c.position_id === position.id);
             if (positionCandidates.length === 0) return null;
             return (
-              <Card key={position.id} className="p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <h3 className="font-semibold text-slate-900">{position.title}</h3>
+              <Card key={position.id} className="p-5 rounded-sm shadow-none border border-slate-200">
+                <div className="flex items-center gap-3 mb-5 border-b border-slate-100 pb-3">
+                  <h3 className="text-lg font-bold text-primary-900">{position.title}</h3>
                   <Badge variant="neutral">
                     {positionCandidates.length} candidate{positionCandidates.length !== 1 ? "s" : ""}
                   </Badge>
@@ -206,25 +207,25 @@ export default function CandidatesPage() {
                   {positionCandidates.map((cand) => (
                     <div
                       key={cand.id}
-                      className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 hover:border-primary-300 transition-colors"
+                      className="flex items-start gap-4 p-4 rounded-sm border-2 border-slate-100 hover:border-primary-300 transition-colors bg-white"
                     >
                       {cand.photo_url ? (
                         <img
                           src={cand.photo_url}
                           alt={cand.name}
-                          className="w-12 h-12 rounded-full object-cover flex-shrink-0"
+                          className="w-14 h-14 rounded-sm object-cover flex-shrink-0"
                         />
                       ) : (
-                        <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
-                          <span className="text-primary-600 font-semibold text-sm">
+                        <div className="w-14 h-14 rounded-sm bg-slate-100 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                          <span className="text-slate-500 font-bold text-lg">
                             {cand.name.charAt(0).toUpperCase()}
                           </span>
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-900 text-sm">{cand.name}</p>
+                        <p className="font-bold text-slate-900 text-base">{cand.name}</p>
                         {cand.bio && (
-                          <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{cand.bio}</p>
+                          <p className="text-sm text-slate-600 mt-1 line-clamp-2 leading-relaxed">{cand.bio}</p>
                         )}
                       </div>
                       {canManage && (

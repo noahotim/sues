@@ -164,13 +164,14 @@ export default function VotePage() {
     <div className="min-h-screen bg-slate-50 py-8 px-4">
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Header */}
-        <div className="text-center">
-          <div className="w-14 h-14 rounded-2xl bg-primary-600 flex items-center justify-center shadow-lg shadow-primary-600/20 mx-auto mb-4">
-            <Vote size={28} className="text-white" />
+        <div className="mb-10 border-b-2 border-primary-900 pb-6">
+          <div className="flex items-center gap-3 mb-2">
+            <Vote size={24} className="text-primary-900" />
+            <span className="text-xs font-bold tracking-widest text-slate-500 uppercase">Soroti University Engineering Society</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Cast Your Vote</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Your vote is confidential and securely recorded.
+          <h1 className="text-4xl font-extrabold text-primary-900 tracking-tight">Official Voting Booth</h1>
+          <p className="text-sm text-slate-600 mt-2">
+            Your vote is confidential and securely recorded on the SUES electoral ledger.
           </p>
         </div>
 
@@ -181,7 +182,7 @@ export default function VotePage() {
             <select
               value={selectedElectionId}
               onChange={(e) => setSelectedElectionId(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3.5 py-2.5 rounded-sm border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900"
             >
               {elections.map((e) => (
                 <option key={e.id} value={e.id}>
@@ -210,9 +211,9 @@ export default function VotePage() {
         {/* Election info */}
         {selectedElection && (
           <Card className="p-5">
-            <h2 className="text-lg font-semibold text-slate-900">{selectedElection.title}</h2>
+            <h2 className="text-2xl font-bold text-slate-900">{selectedElection.title}</h2>
             {selectedElection.description && (
-              <p className="text-sm text-slate-500 mt-1">{selectedElection.description}</p>
+              <p className="text-sm text-slate-600 mt-2">{selectedElection.description}</p>
             )}
             <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
               {selectedElection.start_time && (
@@ -260,7 +261,7 @@ export default function VotePage() {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-primary-600">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                           Position {idx + 1}
                         </span>
                         {hasVoted && (
@@ -270,7 +271,7 @@ export default function VotePage() {
                           </Badge>
                         )}
                       </div>
-                      <h3 className="font-semibold text-slate-900 mt-1">{position.title}</h3>
+                      <h3 className="text-xl font-bold text-primary-900 mt-1">{position.title}</h3>
                       {position.description && (
                         <p className="text-xs text-slate-500 mt-0.5">{position.description}</p>
                       )}
@@ -278,9 +279,9 @@ export default function VotePage() {
                   </div>
 
                   {hasVoted ? (
-                    <div className="bg-success-50 border border-success-200 rounded-lg p-4 text-center">
-                      <CheckCircle2 size={24} className="text-success-600 mx-auto mb-2" />
-                      <p className="text-sm font-medium text-success-700">
+                    <div className="bg-success-50 border border-success-200 rounded-sm p-4 text-center">
+                      <CheckCircle2 size={24} className="text-success-700 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-success-800">
                         Your vote has been recorded for this position.
                       </p>
                     </div>
@@ -294,9 +295,9 @@ export default function VotePage() {
                         {positionCandidates.map((cand) => (
                           <label
                             key={cand.id}
-                            className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                            className={`flex items-start gap-4 p-4 rounded-sm border-2 cursor-pointer transition-all ${
                               selected === cand.id
-                                ? "border-primary-500 bg-primary-50"
+                                ? "border-primary-900 bg-primary-50"
                                 : "border-slate-200 hover:border-slate-300"
                             }`}
                           >
@@ -308,7 +309,7 @@ export default function VotePage() {
                               onChange={() =>
                                 setSelections((prev) => ({ ...prev, [position.id]: cand.id }))
                               }
-                              className="mt-1 accent-primary-600"
+                              className="mt-1 accent-primary-900 w-4 h-4"
                             />
                             {cand.photo_url ? (
                               <img
@@ -317,16 +318,16 @@ export default function VotePage() {
                                 className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                               />
                             ) : (
-                              <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
-                                <span className="text-primary-600 font-semibold text-sm">
+                              <div className="w-12 h-12 bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
+                                <span className="text-slate-500 font-semibold text-lg">
                                   {cand.name.charAt(0).toUpperCase()}
                                 </span>
                               </div>
                             )}
                             <div className="flex-1">
-                              <p className="font-medium text-slate-900 text-sm">{cand.name}</p>
+                              <p className="font-bold text-slate-900 text-base">{cand.name}</p>
                               {cand.bio && (
-                                <p className="text-xs text-slate-500 mt-0.5">{cand.bio}</p>
+                                <p className="text-sm text-slate-600 mt-1 leading-relaxed">{cand.bio}</p>
                               )}
                             </div>
                           </label>
@@ -345,7 +346,7 @@ export default function VotePage() {
                           ) : (
                             <>
                               <CheckSquare size={16} />
-                              Submit Vote
+                              Confirm Selection
                             </>
                           )}
                         </Button>
