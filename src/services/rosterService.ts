@@ -3,15 +3,15 @@ import { collection, doc, getDocs, setDoc, deleteDoc, query, where, onSnapshot }
 
 export interface VoterRosterEntry {
   id: string;
-  election_id: string;
-  voter_email: string;
-  voter_name: string;
-  has_voted: boolean;
+  electionId: string;
+  voterEmail: string;
+  voterName: string;
+  hasVoted: boolean;
 }
 
 export const rosterService = {
   subscribeToRoster: (electionId: string, callback: (data: VoterRosterEntry[]) => void) => {
-    const q = query(collection(db, "voter_roster"), where("election_id", "==", electionId));
+    const q = query(collection(db, "voter_roster"), where("electionId", "==", electionId));
     return onSnapshot(q, (snapshot) => {
       const roster = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VoterRosterEntry));
       callback(roster);
@@ -20,7 +20,7 @@ export const rosterService = {
 
   getRoster: async (electionId: string) => {
     try {
-      const q = query(collection(db, "voter_roster"), where("election_id", "==", electionId));
+      const q = query(collection(db, "voter_roster"), where("electionId", "==", electionId));
       const snapshot = await getDocs(q);
       const roster = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VoterRosterEntry));
       return { data: roster, error: null };
@@ -29,10 +29,10 @@ export const rosterService = {
     }
   },
 
-  addVoter: async (data: Omit<VoterRosterEntry, "id" | "has_voted">) => {
+  addVoter: async (data: Omit<VoterRosterEntry, "id" | "hasVoted">) => {
     try {
       const newDocRef = doc(collection(db, "voter_roster"));
-      const fullData = { ...data, has_voted: false };
+      const fullData = { ...data, hasVoted: false };
       await setDoc(newDocRef, fullData);
       return { data: { id: newDocRef.id, ...fullData }, error: null };
     } catch (error: any) {
@@ -56,10 +56,10 @@ export const rosterService = {
       for (const voter of voters) {
         const newDocRef = doc(collection(db, "voter_roster"));
         await setDoc(newDocRef, {
-          election_id: electionId,
-          voter_email: voter.email,
-          voter_name: voter.name,
-          has_voted: false
+          electionId,
+          voterEmail: voter.email,
+          voterName: voter.name,
+          hasVoted: false
         });
       }
       return { data: { success: true }, error: null };

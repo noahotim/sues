@@ -103,7 +103,7 @@ export default function VotePage() {
   }, [selectedElectionId, session]);
 
   const isEligible =
-    profile && roster.some((r) => r.voter_email.toLowerCase() === profile.email.toLowerCase());
+    profile && roster.some((r) => r.voterEmail.toLowerCase() === profile.email.toLowerCase());
 
   async function handleSubmitVote(positionId: string) {
     if (!session || !selectedElectionId) return;
@@ -216,16 +216,16 @@ export default function VotePage() {
               <p className="text-sm text-slate-600 mt-2">{selectedElection.description}</p>
             )}
             <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
-              {selectedElection.start_time && (
+              {selectedElection.startTime && (
                 <span className="flex items-center gap-1">
                   <Clock size={14} />
-                  Started: {new Date(selectedElection.start_time).toLocaleString()}
+                  Started: {new Date(selectedElection.startTime).toLocaleString()}
                 </span>
               )}
-              {selectedElection.end_time && (
+              {selectedElection.endTime && (
                 <span className="flex items-center gap-1">
                   <Clock size={14} />
-                  Ends: {new Date(selectedElection.end_time).toLocaleString()}
+                  Ends: {new Date(selectedElection.endTime).toLocaleString()}
                 </span>
               )}
             </div>
@@ -252,7 +252,7 @@ export default function VotePage() {
         ) : (
           <div className="space-y-6">
             {positions.map((position, idx) => {
-              const positionCandidates = candidates.filter((c) => c.position_id === position.id);
+              const positionCandidates = candidates.filter((c) => c.positionId === position.id);
               const hasVoted = votedPositions.has(position.id);
               const selected = selections[position.id];
 
@@ -311,9 +311,9 @@ export default function VotePage() {
                               }
                               className="mt-1 accent-primary-900 w-4 h-4"
                             />
-                            {cand.photo_url ? (
+                            {cand.photoUrl ? (
                               <img
-                                src={cand.photo_url}
+                                src={cand.photoUrl}
                                 alt={cand.name}
                                 className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                               />

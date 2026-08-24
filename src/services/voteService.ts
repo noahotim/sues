@@ -4,10 +4,10 @@ import { httpsCallable } from "firebase/functions";
 
 export interface Vote {
   id: string;
-  election_id: string;
-  position_id: string;
-  candidate_id: string;
-  // NO voter_id to maintain anonymity
+  electionId: string;
+  positionId: string;
+  candidateId: string;
+  // NO voterId to maintain anonymity
 }
 
 export const voteService = {
@@ -24,12 +24,7 @@ export const voteService = {
   subscribeToVotes: (electionId: string, callback: (data: Vote[]) => void) => {
     const q = query(collection(db, "votes"), where("electionId", "==", electionId));
     return onSnapshot(q, (snapshot) => {
-      const votes = snapshot.docs.map(doc => ({ 
-        id: doc.id,
-        election_id: doc.data().electionId, // Map Firestore camelCase if necessary, or just use snake_case in Cloud Functions. Cloud Functions used camelCase `electionId`.
-        position_id: doc.data().positionId,
-        candidate_id: doc.data().candidateId
-      } as Vote));
+      const votes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Vote));
       callback(votes);
     });
   },
@@ -38,12 +33,7 @@ export const voteService = {
     try {
       const q = query(collection(db, "votes"), where("electionId", "==", electionId));
       const snapshot = await getDocs(q);
-      const votes = snapshot.docs.map(doc => ({ 
-        id: doc.id,
-        election_id: doc.data().electionId,
-        position_id: doc.data().positionId,
-        candidate_id: doc.data().candidateId
-      } as Vote));
+      const votes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Vote));
       return { data: votes, error: null };
     } catch (error: any) {
       return { data: null, error: error.message };

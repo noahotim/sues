@@ -6,8 +6,8 @@ import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User 
 export interface UserProfile {
   id: string;
   email: string;
-  full_name: string;
-  role_id: string;
+  fullName: string;
+  roleId: string;
 }
 
 export const authService = {
@@ -46,8 +46,8 @@ export const authService = {
         data: {
           id: uid,
           email: data.email,
-          full_name: data.fullName,
-          role_id: data.role || "VOTER" // Fallback to VOTER if not explicitly set in doc yet
+          fullName: data.fullName,
+          roleId: data.role || "VOTER" // Fallback to VOTER if not explicitly set in doc yet
         },
         error: null
       };
@@ -68,8 +68,8 @@ export const authService = {
         return {
           id: doc.id,
           email: data.email,
-          full_name: data.fullName,
-          role_id: data.role || "VOTER"
+          fullName: data.fullName,
+          roleId: data.role || "VOTER"
         } as UserProfile;
       });
       return { data: profiles, error: null };

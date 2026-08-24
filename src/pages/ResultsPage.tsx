@@ -79,7 +79,7 @@ export default function ResultsPage() {
         if (votesRes.data) {
           const counts: Record<string, number> = {};
           votesRes.data.forEach(v => {
-            counts[v.candidate_id] = (counts[v.candidate_id] || 0) + 1;
+            counts[v.candidateId] = (counts[v.candidateId] || 0) + 1;
           });
           setVoteCounts(counts);
         }
@@ -99,7 +99,7 @@ export default function ResultsPage() {
   // Build results per position
   const positionResults: PositionResult[] = positions
     .map((pos) => {
-      const posCandidates = candidates.filter((c) => c.position_id === pos.id);
+      const posCandidates = candidates.filter((c) => c.positionId === pos.id);
       const posVotes = posCandidates.reduce(
         (sum, c) => sum + (voteCounts[c.id] ?? 0),
         0
@@ -113,7 +113,7 @@ export default function ResultsPage() {
         .sort((a, b) => b.votes - a.votes);
       return { position: pos, results, totalVotes: posVotes };
     })
-    .sort((a, b) => a.position.display_order - b.position.display_order);
+    .sort((a, b) => a.position.displayOrder - b.position.displayOrder);
 
   if (loading) return <LoadingState message="Loading results..." />;
   if (error) return <ErrorState message="We could not load the results." onRetry={load} />;

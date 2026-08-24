@@ -8,7 +8,7 @@ service cloud.firestore {
     }
     
     function hasRole(role) {
-      return isAuthenticated() && request.auth.token.role == role;
+      return isAuthenticated() && 'role' in request.auth.token && request.auth.token.role == role;
     }
     
     function isChairperson() {
@@ -41,6 +41,12 @@ service cloud.firestore {
       // Updates to role or sensitive info happen via Cloud Functions
       allow update: if isAuthenticated() && request.auth.uid == userId 
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName']);
+
+      // Vote receipts: a voter reads their own; admins read all. Written only by castVote.
+      match /receipts/{receiptId} {
+        allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+        allow write: if false;
+      }
     }
 
     // Elections

@@ -55,8 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile({
           id: firebaseUser.uid,
           email: firebaseUser.email || "",
-          full_name: firebaseUser.displayName || "",
-          role_id: userRoleStr
+          fullName: firebaseUser.displayName || "",
+          roleId: userRoleStr
         });
       }
     } catch {

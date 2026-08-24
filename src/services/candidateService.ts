@@ -4,12 +4,12 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 
 export interface Candidate {
   id: string;
-  election_id: string;
-  position_id: string;
+  electionId: string;
+  positionId: string;
   name: string;
   bio: string;
-  photo_url: string;
-  display_order: number;
+  photoUrl: string;
+  displayOrder: number;
 }
 
 export const candidateService = {
@@ -17,12 +17,12 @@ export const candidateService = {
     try {
       const q = query(
         collection(db, "candidates"),
-        where("election_id", "==", electionId)
+        where("electionId", "==", electionId)
       );
       const snapshot = await getDocs(q);
       const candidates = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as Candidate))
-        .sort((a, b) => a.display_order - b.display_order);
+        .sort((a, b) => a.displayOrder - b.displayOrder);
       return { data: candidates, error: null };
     } catch (error: any) {
       return { data: null, error: error.message };
@@ -64,7 +64,7 @@ export const candidateService = {
       const storageRef = ref(storage, `candidates/${fileName}`);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
-      return { data: { path: url }, error: null }; // Returning URL directly for photo_url
+      return { data: { path: url }, error: null }; // Returning URL directly for photoUrl
     } catch (error: any) {
       return { data: null, error: error.message };
     }

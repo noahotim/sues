@@ -67,9 +67,9 @@ export default function ElectionsPage() {
         title,
         description,
         status: "draft",
-        results_published: false,
-        start_time: startTime ? new Date(startTime).toISOString() : null,
-        end_time: endTime ? new Date(endTime).toISOString() : null,
+        resultsPublished: false,
+        startTime: startTime ? new Date(startTime).toISOString() : null,
+        endTime: endTime ? new Date(endTime).toISOString() : null,
       });
       setShowCreate(false);
       setTitle("");
@@ -164,16 +164,16 @@ export default function ElectionsPage() {
               </div>
 
               <div className="flex items-center gap-4 text-xs text-slate-500 mb-4">
-                {election.start_time && (
+                {election.startTime && (
                   <span className="flex items-center gap-1">
                     <Calendar size={14} />
-                    {new Date(election.start_time).toLocaleDateString()}
+                    {new Date(election.startTime).toLocaleDateString()}
                   </span>
                 )}
-                {election.end_time && (
+                {election.endTime && (
                   <span className="flex items-center gap-1">
                     <Calendar size={14} />
-                    {new Date(election.end_time).toLocaleDateString()}
+                    {new Date(election.endTime).toLocaleDateString()}
                   </span>
                 )}
               </div>
@@ -305,11 +305,11 @@ function PositionsModal({
     setSubmitting(true);
     try {
       await electionService.createPosition({
-        election_id: election.id,
+        electionId: election.id,
         title,
         description,
-        max_votes: parseInt(maxVotes) || 1,
-        display_order: positions.length,
+        maxVotes: parseInt(maxVotes) || 1,
+        displayOrder: positions.length,
       });
       setTitle("");
       setDescription("");
@@ -357,7 +357,7 @@ function PositionsModal({
                       {idx + 1}. {pos.title}
                     </span>
                     <span className="text-xs text-slate-500 ml-2">
-                      (max {pos.max_votes} vote{pos.max_votes > 1 ? "s" : ""})
+                      (max {pos.maxVotes} vote{pos.maxVotes > 1 ? "s" : ""})
                     </span>
                   </div>
                   <button
