@@ -31,12 +31,13 @@ An online voting platform built for the **Soroti University Engineering Society 
 
 ```bash
 npm install
+cp .env.example .env   # or copy .env.example to .env on Windows
 npm run dev
 ```
 
-Open http://localhost:5173. The Firebase configuration is read from `src/lib/firebase.ts`. If you are contributing against the live project, the app connects to the shared backend automatically — be careful not to create real test data in production.
+Open http://localhost:5173. The Firebase configuration is read from environment variables (see `.env.example`). If you are contributing against the live project, the app connects to the shared backend automatically — be careful not to create real test data in production.
 
-> **Note:** The Firebase API keys are currently checked into the repository. They are web-safe public keys, but moving them to a `.env` file (see `.env.example`) is planned.
+> **Note:** The `.env` file is gitignored. The Firebase keys are web-safe public API keys, but keeping them out of the repository is good practice.
 
 ## Project Structure
 
