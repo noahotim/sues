@@ -82,13 +82,13 @@ export default function AuditLogsPage() {
                 {logs.map((log) => (
                   <tr key={log.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 text-slate-500 whitespace-nowrap text-xs">
-                      {formatTime(log.created_at)}
+                      {formatTime(log.createdAt)}
                     </td>
-                    <td className="px-4 py-3 text-slate-700 font-medium">{log.user_email || "—"}</td>
+                    <td className="px-4 py-3 text-slate-700 font-medium">{log.userEmail || "—"}</td>
                     <td className="px-4 py-3">
                       <Badge variant="primary">{formatAction(log.action)}</Badge>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{log.entity_type || "—"}</td>
+                    <td className="px-4 py-3 text-slate-600">{log.entityType || "—"}</td>
                     <td className="px-4 py-3 text-slate-500 text-xs">
                       {Object.keys(log.details).length > 0
                         ? JSON.stringify(log.details)

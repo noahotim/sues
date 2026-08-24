@@ -1,23 +1,23 @@
 import { db } from "../lib/firebase";
-import { collection, doc, getDocs, setDoc, updateDoc, deleteDoc, query, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDocs, setDoc, updateDoc, deleteDoc, query, orderBy, where, onSnapshot } from "firebase/firestore";
 
 export interface Election {
   id: string;
   title: string;
   description: string;
   status: "draft" | "active" | "closed" | "published";
-  start_time: string | null;
-  end_time: string | null;
-  results_published: boolean;
+  startTime: string | null;
+  endTime: string | null;
+  resultsPublished: boolean;
 }
 
 export interface Position {
   id: string;
-  election_id: string;
+  electionId: string;
   title: string;
   description: string;
-  max_votes: number;
-  display_order: number;
+  maxVotes: number;
+  displayOrder: number;
 }
 
 export const electionService = {
@@ -42,12 +42,11 @@ export const electionService = {
 
   getPositions: async (electionId: string) => {
     try {
-      const q = query(collection(db, "positions")); // Actually, better to query by election_id
+      const q = query(collection(db, "positions"), where("electionId", "==", electionId));
       const snapshot = await getDocs(q);
       const positions = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as Position))
-        .filter(p => p.election_id === electionId)
-        .sort((a, b) => a.display_order - b.display_order);
+        .sort((a, b) => a.displayOrder - b.displayOrder);
       return { data: positions, error: null };
     } catch (error: any) {
       return { data: null, error: error.message };

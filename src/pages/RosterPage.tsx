@@ -83,9 +83,9 @@ export default function RosterPage() {
     setSubmitting(true);
     try {
       await rosterService.addVoter({
-        election_id: selectedElectionId,
-        voter_email: voterEmail,
-        voter_name: voterName,
+        electionId: selectedElectionId,
+        voterEmail,
+        voterName,
       });
       setShowAdd(false);
       setVoterEmail("");
@@ -156,12 +156,12 @@ export default function RosterPage() {
     const q = search.toLowerCase();
     return roster.filter(
       (r) =>
-        r.voter_email.toLowerCase().includes(q) ||
-        r.voter_name.toLowerCase().includes(q)
+        r.voterEmail.toLowerCase().includes(q) ||
+        r.voterName.toLowerCase().includes(q)
     );
   }, [roster, search]);
 
-  const votedCount = roster.filter((r) => r.has_voted).length;
+  const votedCount = roster.filter((r) => r.hasVoted).length;
 
   if (loading) return <LoadingState message="Loading voter roster..." />;
   if (error) return <ErrorState message="We could not load the voter roster." onRetry={load} />;
@@ -283,11 +283,11 @@ export default function RosterPage() {
                     {filteredRoster.map((entry) => (
                       <tr key={entry.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
                         <td className="px-4 py-3 font-medium text-slate-900">
-                          {entry.voter_name || "—"}
+                          {entry.voterName || "—"}
                         </td>
-                        <td className="px-4 py-3 text-slate-600">{entry.voter_email}</td>
+                        <td className="px-4 py-3 text-slate-600">{entry.voterEmail}</td>
                         <td className="px-4 py-3">
-                          {entry.has_voted ? (
+                          {entry.hasVoted ? (
                             <Badge variant="success">
                               <CheckCircle2 size={12} className="mr-1" />
                               Voted
@@ -394,7 +394,7 @@ export default function RosterPage() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
         title="Remove Voter"
-        message={`Remove ${deleteTarget?.voter_email} from the roster?`}
+        message={`Remove ${deleteTarget?.voterEmail} from the roster?`}
         confirmLabel="Remove"
         danger
       />

@@ -54,7 +54,7 @@ export default function UsersPage() {
     ? profiles.filter(
         (p) =>
           p.email.toLowerCase().includes(search.toLowerCase()) ||
-          p.full_name.toLowerCase().includes(search.toLowerCase())
+          p.fullName.toLowerCase().includes(search.toLowerCase())
       )
     : profiles;
 
@@ -124,20 +124,20 @@ export default function UsersPage() {
                 {filteredProfiles.map((p) => (
                   <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-slate-900">
-                      {p.full_name || "—"}
+                      {p.fullName || "—"}
                       {p.id === currentUser?.id && (
                         <span className="ml-2 text-xs text-primary-600 font-normal">(You)</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-slate-600">{p.email}</td>
                     <td className="px-4 py-3">
-                      <Badge variant={getRoleBadgeVariant(p.role_id)}>
-                        {getRoleLabel(p.role_id)}
+                      <Badge variant={getRoleBadgeVariant(p.roleId)}>
+                        {getRoleLabel(p.roleId)}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
                       <select
-                        value={p.role_id}
+                        value={p.roleId}
                         onChange={(e) => handleRoleChange(p.id, e.target.value)}
                         disabled={updating === p.id || p.id === currentUser?.id}
                         className="text-xs px-2.5 py-1.5 rounded-sm border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900 disabled:opacity-50 disabled:cursor-not-allowed"

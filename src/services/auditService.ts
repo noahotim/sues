@@ -3,13 +3,13 @@ import { collection, query, orderBy, getDocs, onSnapshot, limit } from "firebase
 
 export interface AuditLog {
   id: string;
-  user_id: string;
-  user_email: string;
+  userId: string;
+  userEmail: string;
   action: string;
-  entity_type: string;
-  entity_id: string;
+  entityType: string;
+  entityId: string;
   details: any;
-  created_at: string;
+  createdAt: string;
 }
 
 export const auditService = {
@@ -21,13 +21,13 @@ export const auditService = {
         const data = doc.data();
         return {
           id: doc.id,
-          user_id: data.userId,
-          user_email: data.userEmail,
+          userId: data.userId,
+          userEmail: data.userEmail,
           action: data.action,
-          entity_type: data.entityType,
-          entity_id: data.entityId,
+          entityType: data.entityType,
+          entityId: data.entityId,
           details: data.details,
-          created_at: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+          createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString()
         } as AuditLog;
       });
       return { data: logs, error: null };
@@ -43,13 +43,13 @@ export const auditService = {
         const data = doc.data();
         return {
           id: doc.id,
-          user_id: data.userId,
-          user_email: data.userEmail,
+          userId: data.userId,
+          userEmail: data.userEmail,
           action: data.action,
-          entity_type: data.entityType,
-          entity_id: data.entityId,
+          entityType: data.entityType,
+          entityId: data.entityId,
           details: data.details,
-          created_at: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString()
+          createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : new Date().toISOString()
         } as AuditLog;
       });
       callback(logs);

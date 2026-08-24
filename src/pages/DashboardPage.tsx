@@ -104,7 +104,7 @@ export default function DashboardPage() {
         <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-1">SUES Administration</h2>
         <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">System Overview</h1>
         <p className="text-sm text-slate-600 mt-2">
-          Welcome back{profile?.full_name ? `, ${profile.full_name}` : ""}.
+          Welcome back{profile?.fullName ? `, ${profile.fullName}` : ""}.
           {role && <span className="ml-1">You are signed in as {role.label}.</span>}
         </p>
       </div>
@@ -148,13 +148,13 @@ export default function DashboardPage() {
                     <td className="py-3 font-medium text-slate-900">{election.title}</td>
                     <td className="py-3">{statusBadge(election.status)}</td>
                     <td className="py-3 text-slate-600">
-                      {election.start_time
-                        ? new Date(election.start_time).toLocaleDateString()
+                      {election.startTime
+                        ? new Date(election.startTime).toLocaleDateString()
                         : "—"}
                     </td>
                     <td className="py-3 text-slate-600">
-                      {election.end_time
-                        ? new Date(election.end_time).toLocaleDateString()
+                      {election.endTime
+                        ? new Date(election.endTime).toLocaleDateString()
                         : "—"}
                     </td>
                   </tr>

@@ -88,12 +88,12 @@ export default function CandidatesPage() {
     setSubmitting(true);
     try {
       await candidateService.createCandidate({
-        election_id: selectedElectionId,
-        position_id: positionId,
+        electionId: selectedElectionId,
+        positionId,
         name,
         bio,
-        photo_url: photoUrl,
-        display_order: candidates.length,
+        photoUrl,
+        displayOrder: candidates.length,
       });
       setShowAdd(false);
       setName("");
@@ -193,7 +193,7 @@ export default function CandidatesPage() {
       ) : (
         <div className="space-y-6">
           {positions.map((position) => {
-            const positionCandidates = candidates.filter((c) => c.position_id === position.id);
+            const positionCandidates = candidates.filter((c) => c.positionId === position.id);
             if (positionCandidates.length === 0) return null;
             return (
               <Card key={position.id} className="p-5 rounded-sm shadow-none border border-slate-200">
@@ -209,9 +209,9 @@ export default function CandidatesPage() {
                       key={cand.id}
                       className="flex items-start gap-4 p-4 rounded-sm border-2 border-slate-100 hover:border-primary-300 transition-colors bg-white"
                     >
-                      {cand.photo_url ? (
+                      {cand.photoUrl ? (
                         <img
-                          src={cand.photo_url}
+                          src={cand.photoUrl}
                           alt={cand.name}
                           className="w-14 h-14 rounded-sm object-cover flex-shrink-0"
                         />

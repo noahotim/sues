@@ -119,7 +119,7 @@ export default function AdminLayout() {
         <div className="px-3 py-4 border-t border-primary-900">
           <div className="px-3 py-2 mb-2">
             <p className="text-sm font-bold text-white truncate tracking-wide">
-              {profile?.full_name || profile?.email || session.user.email}
+              {profile?.fullName || profile?.email || session.user.email}
             </p>
             {role && (
               <p className="text-xs text-slate-400 mt-0.5">{role.label}</p>
