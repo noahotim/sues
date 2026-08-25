@@ -14,15 +14,6 @@ function toDate(value: any): Date | null {
   return null;
 }
 
-// Only @sun.ac.ug student emails (numeric part starting 220-260) may use the app.
-function isValidStudentEmail(email?: string | null): boolean {
-  if (!email) return false;
-  const m = /^(\d+)@sun\.ac\.ug$/i.exec(email);
-  if (!m || !m[1]) return false;
-  const prefix = parseInt(m[1].slice(0, 3), 10);
-  return prefix >= 220 && prefix <= 260;
-}
-
 // Reject and delete an account that may not sign in.
 async function rejectUser(uid: string, email: string | undefined, reason: string) {
   console.warn(`Rejecting signup (${reason}):`, email);
@@ -41,24 +32,26 @@ async function allowlistSeeded(): Promise<boolean> {
   return !seed.empty;
 }
 
-// 1. Trigger: Auto-create user document & assign default role on sign up
+// THE eligibility rule for signing in and voting: the email must be on the
+// voters register ("eligible_emails", imported from the committee's CSV).
 export const onUserCreated = functions.auth.user().onCreate(async (user) => {
   try {
-    // Gate 1: must be a valid @sun.ac.ug student email (number starting 220-260).
-    if (!isValidStudentEmail(user.email)) {
-      await rejectUser(user.uid, user.email, "not a valid student email");
-      return;
-    }
-
-    // Gate 2: once seeded, the email must appear in the eligible_emails
-    // allowlist (imported from the electoral committee's CSV).
     if (await allowlistSeeded()) {
+      // Register is live: membership alone decides.
       const allowed = await db
         .collection("eligible_emails")
         .doc((user.email || "").toLowerCase())
         .get();
       if (!allowed.exists) {
-        await rejectUser(user.uid, user.email, "not on the eligible voters list");
+        await rejectUser(user.uid, user.email, "not on the voters register");
+        return;
+      }
+    } else {
+      // Bootstrap window: the register has not been imported yet. Accept
+      // university addresses only so outsiders cannot claim the first
+      // (Chairperson) account. Importing the CSV switches to the full rule.
+      if (!(user.email || "").toLowerCase().endsWith("@sun.ac.ug")) {
+        await rejectUser(user.uid, user.email, "register not imported yet; only @sun.ac.ug emails accepted");
         return;
       }
     }
