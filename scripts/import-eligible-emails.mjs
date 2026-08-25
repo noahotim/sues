@@ -55,10 +55,17 @@ for (let i = 0; i < list.length; i += BATCH_SIZE) {
       addedAt: new Date().toISOString(),
     });
   }
+  // Marker the login flow reads: its presence means "the register is live,
+  // membership decides". Written in every batch so it always lands.
+  batch.set(db.collection("eligible_emails").doc("_meta"), {
+    seeded: true,
+    count: list.length,
+    updatedAt: new Date().toISOString(),
+  });
   await batch.commit();
   written += Math.min(BATCH_SIZE, list.length - i);
   console.log(`Imported ${written}/${list.length}`);
 }
 
 console.log(`Done. ${written} eligible email(s) are now in Firestore under "eligible_emails".`);
-console.log('Note: once this collection is non-empty, sign-in is restricted to exactly these emails.');
+console.log('The register is now LIVE: sign-in is restricted to exactly these emails.');
