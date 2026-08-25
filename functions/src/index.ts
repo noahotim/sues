@@ -1,5 +1,5 @@
-import * as admin from "firebase-admin";
-import * as functions from "firebase-functions";
+import admin from "firebase-admin";
+import * as functions from "firebase-functions/v1";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 
@@ -89,6 +89,9 @@ export const castVote = onCall(async (request) => {
       throw new HttpsError("permission-denied", "You are not on the voter roster for this election.");
     }
     const rosterDoc = rosterSnapshot.docs[0];
+    if (!rosterDoc) {
+      throw new HttpsError("permission-denied", "You are not on the voter roster for this election.");
+    }
 
     // e. Check for duplicate vote (votes don't have voter ID, but we track if they voted in a separate collection or inside roster)
     // Actually, in the old schema, `votes` had `voter_id` to prevent duplicate votes per position.
