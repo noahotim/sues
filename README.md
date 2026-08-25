@@ -73,7 +73,7 @@ The Firestore security rules forbid direct client writes to `votes` and `audit_l
 
 ## Voter Eligibility & the Register
 
-There is exactly **one rule** for signing in: *the Google account's email must be on the voters register.* The register lives in Firestore under `eligible_emails/<email>` and is imported from a CSV by the election committee.
+There is exactly **one rule** for signing in: *the Google account's email must appear on the voters register **or** on any election's voter roster.* The register lives in Firestore under `eligible_emails/<email>`; rosters live under each election's `voter_roster` entries. Both are imported from CSVs by the election committee.
 
 ### Importing the register (CSV)
 
@@ -86,11 +86,11 @@ There is exactly **one rule** for signing in: *the Google account's email must b
    npm run import:emails -- emails.csv /path/to/service-account.json
    ```
 
-The import normalizes addresses to lowercase, writes each one as a document, and marks the register as live (`eligible_emails/_meta`). From that moment sign-in is restricted to exactly those emails — enforced in the login flow and again by the `onUserCreated` Cloud Function, which deletes any account that is not on the register so it can never be used to vote.
+The import normalizes addresses to lowercase, writes each one as a document, and marks the register as live (`eligible_emails/_meta`). Imported emails may sign in immediately. Enforcement runs twice: in the login flow and again in the `onUserCreated` Cloud Function, which deletes any account whose email is on neither the register nor a roster so it can never be used to vote.
 
 > **Bootstrap window:** until the CSV has been imported (register still empty), only `@sun.ac.ug` addresses are accepted. This prevents outsiders from creating the first account, which automatically becomes the Chairperson.
 
-Being on the register gets you into the app; casting a ballot additionally requires being on that election's voter roster. For privacy, the security rules let a signed-in user check a single email but never list or write the register, so the full roll cannot be scraped from the client.
+Signing in admits you to the app; casting a ballot additionally requires being on that specific election's voter roster. For privacy, the security rules let a signed-in user check their own email but never list or write the register or anyone else's roster entries, so the rolls cannot be scraped from the client.
 
 ## Scripts
 
@@ -142,7 +142,7 @@ Contributions are welcome. Please follow the standard fork-and-pull-request work
 
 ## Security Notes
 
-- Sign-in is restricted to the **voters register** (`eligible_emails`); the rules expose single-email lookups only, never the full roll.
+- Sign-in is restricted to emails on the **voters register** or an **election roster** (`eligible_emails` / `voter_roster`); the rules expose only single-email register lookups and own-email roster queries, never the full rolls.
 - Votes are stored **anonymously** — no voter ID is attached to a vote document.
 - Double voting is prevented by receipts and roster flags, enforced inside a transaction.
 - Audit logs are read-only via the rules and only visible to the Chairperson.
