@@ -1,5 +1,5 @@
 import { auth, db, functions } from "../lib/firebase";
-import { collection, doc, getDocs, getDoc } from "firebase/firestore";
+import { collection, doc, getDocs, getDoc, query, where } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 
@@ -17,25 +17,33 @@ export const authService = {
       const result = await signInWithPopup(auth, provider);
       const email = (result.user.email || "").toLowerCase();
 
-      // THE eligibility rule: once the voters register has been imported
-      // (eligible_emails/_meta exists), the email must be on it. The rules
-      // allow looking up a single address but never listing all of them.
-      // Until the register is imported the Cloud Function decides instead,
-      // so nobody is locked out early.
+      // THE eligibility rule: an email may sign in when it is on the
+      // voters register (eligible_emails, imported from the committee's CSV)
+      // OR on any election's voter roster (imported per election). The rules
+      // allow single-document register lookups and own-email roster queries,
+      // so the full lists can never be enumerated from the client. When the
+      // register has not been imported yet the Cloud Function decides.
       try {
         const meta = await getDoc(doc(db, "eligible_emails", "_meta"));
         if (meta.exists()) {
-          const allowed = await getDoc(doc(db, "eligible_emails", email));
-          if (!allowed.exists()) {
+          const onRegister = (await getDoc(doc(db, "eligible_emails", email))).exists();
+          let onRoster = false;
+          if (!onRegister) {
+            const mine = await getDocs(
+              query(collection(db, "voter_roster"), where("voterEmail", "==", email))
+            );
+            onRoster = !mine.empty;
+          }
+          if (!onRegister && !onRoster) {
             await signOut(auth);
             return {
               user: null,
-              error: "This email is not on the voters register. Contact the electoral committee.",
+              error: "This email is not on the voters register or any election roster. Contact the electoral committee.",
             };
           }
         }
       } catch {
-        // Could not read the register (offline / rules change): let the
+        // Could not read eligibility data (offline / rules change): let the
         // server-side trigger make the final decision.
       }
 
