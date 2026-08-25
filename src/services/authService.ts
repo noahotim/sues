@@ -1,5 +1,5 @@
 import { auth, db, functions } from "../lib/firebase";
-import { collection, doc, getDocs, getDoc } from "firebase/firestore";
+import { collection, doc, getDocs, getDoc, query, where } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 
@@ -15,11 +15,30 @@ export const authService = {
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
-      // Validate domain if needed, e.g.
-      // if (!result.user.email?.endsWith("@sun.ac.ug")) {
-      //   await signOut(auth);
-      //   throw new Error("Only @sun.ac.ug emails are allowed");
-      // }
+      const email = result.user.email;
+      if (!email) {
+        await signOut(auth);
+        return { user: null, error: "The sign-in provider did not return an email address." };
+      }
+
+      // Eligibility gate: only emails on the allowed register (eligible_emails)
+      // or on a voter roster may use the system. Everyone else is signed back out.
+      const onRegister = await getDoc(doc(db, "eligible_emails", email));
+      let onRoster = false;
+      if (!onRegister.exists()) {
+        const ros = await getDocs(
+          query(collection(db, "voter_roster"), where("voterEmail", "==", email.toLowerCase()))
+        );
+        onRoster = !ros.empty;
+      }
+      if (!onRegister.exists() && !onRoster) {
+        await signOut(auth);
+        return {
+          user: null,
+          error: "Your email is not authorized to access this voting system. Contact the election administrator.",
+        };
+      }
+
       return { user: result.user, error: null };
     } catch (error: any) {
       return { user: null, error: error.message };

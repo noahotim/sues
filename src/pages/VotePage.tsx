@@ -10,7 +10,6 @@ import {
   type Election,
   type Position,
   type Candidate,
-  type VoterRosterEntry,
 } from "../services";
 import {
   Card,
@@ -23,13 +22,13 @@ import {
 } from "../components/ui";
 
 export default function VotePage() {
-  const { session, profile, permissions, loading: authLoading } = useAuth();
+  const { session, permissions, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [elections, setElections] = useState<Election[]>([]);
   const [selectedElectionId, setSelectedElectionId] = useState("");
   const [positions, setPositions] = useState<Position[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [roster, setRoster] = useState<VoterRosterEntry[]>([]);
+  const [isEligible, setIsEligible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [selections, setSelections] = useState<Record<string, string>>({});
@@ -72,20 +71,20 @@ export default function VotePage() {
     if (!selectedElectionId || !session) {
       setPositions([]);
       setCandidates([]);
-      setRoster([]);
+      setIsEligible(false);
       return;
     }
     (async () => {
       try {
-        const [posRes, candRes, rosRes] = await Promise.all([
+        const [posRes, candRes, eligRes] = await Promise.all([
           electionService.getPositions(selectedElectionId),
           candidateService.getCandidates(selectedElectionId),
-          rosterService.getRoster(selectedElectionId),
+          rosterService.isOnRoster(selectedElectionId, session.user.email),
         ]);
         const pos = posRes.data || [];
         setPositions(pos);
         setCandidates(candRes.data || []);
-        setRoster(rosRes.data || []);
+        setIsEligible(eligRes.data === true);
 
         // Check which positions the user has already voted for
         const voted = new Set<string>();
@@ -97,13 +96,10 @@ export default function VotePage() {
       } catch {
         setPositions([]);
         setCandidates([]);
-        setRoster([]);
+        setIsEligible(false);
       }
     })();
   }, [selectedElectionId, session]);
-
-  const isEligible =
-    profile && roster.some((r) => r.voterEmail.toLowerCase() === profile.email.toLowerCase());
 
   async function handleSubmitVote(positionId: string) {
     if (!session || !selectedElectionId) return;

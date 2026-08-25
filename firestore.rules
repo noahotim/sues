@@ -95,5 +95,15 @@ service cloud.firestore {
       allow read: if isChairperson(); // Only highest admin sees audit logs
       allow write: if false; // Written only by Cloud Functions
     }
+
+    // Allowed-voter register (eligible_emails)
+    // Each user may read only their own entry (used by the login eligibility gate);
+    // admins may read all. Writes happen only via server/seed (never from the client).
+    match /eligible_emails/{email} {
+      // A user may read only their own register entry (used by the login gate);
+      // admins may read all. Writes happen only via server/seed.
+      allow read: if isAuthenticated() && (isAdmin() || request.auth.token.email == email);
+      allow write: if false;
+    }
   }
 }
