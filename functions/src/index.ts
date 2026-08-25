@@ -1,14 +1,42 @@
 import * as admin from "firebase-admin";
-import * as functions from "firebase-functions";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import * as functions from "firebase-functions/v1";
 
 admin.initializeApp();
 const db = admin.firestore();
 
+// Normalize a start/end time that may be a Firestore Timestamp or an ISO string.
+function toDate(value: any): Date | null {
+  if (!value) return null;
+  if (typeof value === "string") return new Date(value);
+  if (typeof value.toDate === "function") return value.toDate();
+  return null;
+}
+
+// Only @sun.ac.ug student emails (numeric part starting 220-260) may use the app.
+function isValidStudentEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const m = /^(\d+)@sun\.ac\.ug$/i.exec(email);
+  if (!m || !m[1]) return false;
+  const prefix = parseInt(m[1].slice(0, 3), 10);
+  return prefix >= 220 && prefix <= 260;
+}
+
 // 1. Trigger: Auto-create user document & assign default role on sign up
 export const onUserCreated = functions.auth.user().onCreate(async (user) => {
   try {
+    // Reject any account that is not a valid @sun.ac.ug student email.
+    // We delete it so it can never be used to sign in or vote.
+    if (!isValidStudentEmail(user.email)) {
+      console.warn("Rejecting non-student email signup:", user.email);
+      try {
+        await admin.auth().deleteUser(user.uid);
+      } catch (deleteError) {
+        console.error("Failed to delete rejected user:", deleteError);
+      }
+      return;
+    }
+
     const usersRef = db.collection("users");
     // Check if this is the first user
     const usersSnapshot = await usersRef.limit(1).get();
@@ -59,10 +87,12 @@ export const castVote = onCall(async (request) => {
       throw new HttpsError("failed-precondition", "Election is not active.");
     }
     const now = new Date();
-    if (election.startTime && now < election.startTime.toDate()) {
+    const startTime = toDate(election?.startTime);
+    const endTime = toDate(election?.endTime);
+    if (startTime && now < startTime) {
       throw new HttpsError("failed-precondition", "Voting has not opened yet.");
     }
-    if (election.endTime && now > election.endTime.toDate()) {
+    if (endTime && now > endTime) {
       throw new HttpsError("failed-precondition", "Voting has closed.");
     }
 
@@ -88,7 +118,7 @@ export const castVote = onCall(async (request) => {
     if (rosterSnapshot.empty) {
       throw new HttpsError("permission-denied", "You are not on the voter roster for this election.");
     }
-    const rosterDoc = rosterSnapshot.docs[0];
+    const rosterDoc = rosterSnapshot.docs[0]!;
 
     // e. Check for duplicate vote (votes don't have voter ID, but we track if they voted in a separate collection or inside roster)
     // Actually, in the old schema, `votes` had `voter_id` to prevent duplicate votes per position.
@@ -120,11 +150,10 @@ export const castVote = onCall(async (request) => {
     // Mark roster as has_voted = true
     transaction.update(rosterDoc.ref, { hasVoted: true });
 
-    // Audit log
+    // Audit log - deliberately WITHOUT the voter's identity so ballot
+    // secrecy is preserved (an admin cannot link a vote to its voter).
     const auditRef = db.collection("audit_logs").doc();
     transaction.set(auditRef, {
-      userId: authData.uid,
-      userEmail: authData.token.email,
       action: "CAST_VOTE",
       entityType: "vote",
       entityId: candidateId,
