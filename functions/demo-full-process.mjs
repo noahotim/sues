@@ -9,10 +9,11 @@ import {
 } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator, collection, query, where, getDocs } from "firebase/firestore";
 import { getFunctions, connectFunctionsEmulator, httpsCallable } from "firebase/functions";
+import { signInAs } from "./demo-auth-helper.mjs";
 
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
-admin.initializeApp({ projectId: "demo-sues" });
+admin.initializeApp({ projectId: "sues-d7a7f" });
 const fdb = admin.firestore();
 
 const EID = "presec2026";
@@ -41,7 +42,7 @@ const BALLOTS = [
   { email: "akello.mary@sun.ac.ug",   pres: "cand_pres2", sec: "cand_sec2" }, // Okeelo, Otime
 ];
 
-const app = initializeApp({ apiKey: "demo", projectId: "demo-sues" });
+const app = initializeApp({ apiKey: "demo", projectId: "sues-d7a7f" });
 const auth = getAuth(app);
 const fns = getFunctions(app);
 connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
@@ -50,7 +51,7 @@ const castVote = httpsCallable(fns, "castVote");
 
 console.log("=== STEP 1: ELIGIBLE VOTERS CAST THEIR VOTES ===");
 for (const b of BALLOTS) {
-  await signInWithEmailAndPassword(auth, b.email, "sues2026");
+  await signInAs(auth, b.email);
   const r1 = await castVote({ electionId: EID, positionId: "pos_president", candidateId: b.pres });
   const r2 = await castVote({ electionId: EID, positionId: "pos_secretary", candidateId: b.sec });
   const ok = r1.data?.success && r2.data?.success;
@@ -78,6 +79,7 @@ votesSnap.docs.forEach((d) => { const c = d.data().candidateId; counts[c] = (cou
 
 const rosterSnap = await fdb.collection("voter_roster").where("electionId", "==", EID).get();
 const eligible = rosterSnap.size;
+const voted = rosterSnap.docs.filter((d) => d.data().hasVoted).length;
 
 for (const pos of positions) {
   const posCands = Object.entries(cands).filter(([, c]) => c.positionId === pos.id);
@@ -92,7 +94,7 @@ for (const pos of positions) {
     console.log(`    ${r.name.padEnd(16)} ${String(r.votes).padStart(2)} vote(s)  ${pct}%${crown}`);
   });
 }
-console.log(`\n  Eligible voters: ${eligible}   Turnout: ${eligible ? Math.round((votesSnap.size / eligible) * 100) : 0}%`);
+console.log(`\n  Eligible voters: ${eligible}   Turnout: ${eligible ? Math.round((voted / eligible) * 100) : 0}%`);
 console.log("  (Votes are anonymous — no voter identity is stored.)\n");
 
 await deleteApp(app);

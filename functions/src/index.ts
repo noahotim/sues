@@ -10,6 +10,11 @@ const db = admin.firestore();
 export const onUserCreated = functions.auth.user().onCreate(async (user) => {
   try {
     const usersRef = db.collection("users");
+    // If a user document already exists, role assignment is managed explicitly
+    // (e.g. by the demo seed); don't overwrite it.
+    const existing = await usersRef.doc(user.uid).get();
+    if (existing.exists) return;
+
     // Check if this is the first user
     const usersSnapshot = await usersRef.limit(1).get();
     const isFirstUser = usersSnapshot.empty;

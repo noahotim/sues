@@ -9,6 +9,7 @@ import {
 } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator, doc, getDoc, getDocs, collection, query, where } from "firebase/firestore";
 import { getFunctions, connectFunctionsEmulator, httpsCallable } from "firebase/functions";
+import { signInAs } from "./demo-auth-helper.mjs";
 
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
@@ -28,11 +29,11 @@ async function resetVoteState() {
   await batch.commit();
   console.log(`reset vote state (votes=${votes.size}, receipts=${receipts.size}, roster rows=${ros.size})`);
 }
-admin.initializeApp({ projectId: "demo-sues" });
+admin.initializeApp({ projectId: "sues-d7a7f" });
 await resetVoteState();
 
 // --- client-side verification -------------------------------------------
-const app = initializeApp({ apiKey: "demo", projectId: "demo-sues" });
+const app = initializeApp({ apiKey: "demo", projectId: "sues-d7a7f" });
 const auth = getAuth(app);
 const db = getFirestore(app);
 const fns = getFunctions(app);
@@ -55,7 +56,7 @@ async function passesGate(email) {
 // 1. CSV voter login-gate + vote flow
 {
   const email = "apio.samson@sun.ac.ug";
-  await signInWithEmailAndPassword(auth, email, "sues2026");
+  await signInAs(auth, email);
   ok("CSV voter passes login gate", await passesGate(email), email);
 
   const castVote = httpsCallable(fns, "castVote");
@@ -73,7 +74,7 @@ async function passesGate(email) {
 // 2. another CSV voter
 {
   const email = "akello.mary@sun.ac.ug";
-  await signInWithEmailAndPassword(auth, email, "sues2026");
+  await signInAs(auth, email);
   ok("2nd CSV voter passes login gate", await passesGate(email));
   const castVote = httpsCallable(fns, "castVote");
   const r = await castVote({ electionId: EID, positionId: "pos_president", candidateId: "cand_pres2" });
@@ -84,9 +85,7 @@ async function passesGate(email) {
 // 3. NON-CSV email would be rejected by the gate
 {
   const intruder = `intruder${Date.now()}@sun.ac.ug`;
-  const { createUserWithEmailAndPassword } = await import("firebase/auth");
-  await createUserWithEmailAndPassword(auth, intruder, "sues2026");
-  await signInWithEmailAndPassword(auth, intruder, "sues2026");
+  await signInAs(auth, intruder);
   ok("non-CSV email fails login gate", !(await passesGate(intruder)), intruder);
   let voteBlocked = false;
   try {
@@ -99,7 +98,7 @@ async function passesGate(email) {
 
 // 4. tally (admin-only read, as designed for anonymity)
 {
-  await signInWithEmailAndPassword(auth, "chair.sues@sun.ac.ug", "sues2026");
+  await signInAs(auth, "chair.sues@sun.ac.ug");
   const votes = await getDocs(query(collection(db, "votes"), where("electionId", "==", EID)));
   const byCand = {};
   votes.docs.forEach((d) => { const c = d.data().candidateId; byCand[c] = (byCand[c] || 0) + 1; });

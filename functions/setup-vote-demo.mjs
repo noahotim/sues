@@ -1,4 +1,4 @@
-// One-shot demo bootstrap for the emulator (project demo-sues).
+// One-shot demo bootstrap for the emulator (project sues-d7a7f).
 // Creates base staff accounts, the "presec2026" election with President &
 // Secretary positions and candidates, and imports the CSV voter roster.
 // Run with the emulators already up:  node setup-vote-demo.mjs
@@ -8,7 +8,7 @@ import { join } from "path";
 
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
-admin.initializeApp({ projectId: "demo-sues" });
+admin.initializeApp({ projectId: "sues-d7a7f" });
 const db = admin.firestore();
 db.settings({ ignoreUndefinedProperties: true });
 const auth = admin.auth();
