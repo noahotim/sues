@@ -101,6 +101,22 @@ The Firestore security rules forbid direct client writes to `votes` and `audit_l
 | `cd functions && npm run build`  | Compile the Cloud Functions        |
 | `cd functions && npm run deploy` | Deploy the Cloud Functions         |
 
+### Local demo with the Emulator Suite
+
+The app is wired to the Firebase emulators when `VITE_USE_EMULATORS=true` (set in `.env`). To bring up the **whole demo with one command** — start the Auth/Firestore/Functions/Storage emulators, seed the election/candidates/roster, and start the Vite dev server — run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File start-demo.ps1
+```
+
+Then open http://localhost:5173 and sign in with a demo account (password `sues2026`):
+
+- **Chairperson** — `chair.sues@sun.ac.ug`
+- **Secretary** — `secretary.sues@sun.ac.ug`
+- **Voter** — `apio.samson@sun.ac.ug` (any of the 5 CSV voters)
+
+> The emulator database is in-memory, so it starts empty every time. `start-demo.ps1` re-seeds it automatically. The seed scripts live in `functions/` (`setup-vote-demo.mjs`, `reset-votes.mjs`, `verify-demo.mjs`, `demo-full-process.mjs`).
+
 ## Contributing
 
 Contributions are welcome. Please follow the standard fork-and-pull-request workflow:
