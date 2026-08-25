@@ -41,7 +41,7 @@ export default function RosterPage() {
   // Import state
   const [csvText, setCsvText] = useState("");
   const [csvFileName, setCsvFileName] = useState("");
-  const [importResult, setImportResult] = useState<{ inserted: number; errors: string[] } | null>(null);
+  const [importResult, setImportResult] = useState<{ inserted: number; skipped?: number; errors: string[] } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,11 +83,28 @@ export default function RosterPage() {
   async function handleAdd() {
     setSubmitting(true);
     try {
-      await rosterService.addVoter({
+      const email = voterEmail.trim().toLowerCase();
+      if (!email.includes("@")) {
+        alert("Please enter a valid email address.");
+        setSubmitting(false);
+        return;
+      }
+      // Client-side guard for instant feedback; the service also prevents dups.
+      if (roster.some((r) => r.voterEmail.toLowerCase() === email)) {
+        alert(`${email} is already on the roster.`);
+        setSubmitting(false);
+        return;
+      }
+      const res = await rosterService.addVoter({
         electionId: selectedElectionId,
         voterEmail,
         voterName,
       });
+      if (res.error) {
+        alert(res.error);
+        setSubmitting(false);
+        return;
+      }
       setShowAdd(false);
       setVoterEmail("");
       setVoterName("");
@@ -164,9 +181,16 @@ export default function RosterPage() {
         return;
       }
       const result = await rosterService.bulkUploadRoster(selectedElectionId, voters);
-      if (result.data) {
-        setImportResult({ inserted: voters.length, errors: [] });
+      if (result.error) {
+        setImportResult({ inserted: 0, errors: [result.error] });
+        setSubmitting(false);
+        return;
       }
+      setImportResult({
+        inserted: result.data?.inserted ?? 0,
+        skipped: result.data?.skipped ?? 0,
+        errors: [],
+      });
       const { data } = await rosterService.getRoster(selectedElectionId);
       if (data) setRoster(data);
     } catch (err) {
@@ -425,6 +449,9 @@ export default function RosterPage() {
             <div className={`rounded-lg p-3 text-sm ${importResult.errors.length > 0 ? "bg-warning-50 border border-warning-200" : "bg-success-50 border border-success-200"}`}>
               <p className="font-medium text-slate-700">
                 Inserted {importResult.inserted} voter{importResult.inserted !== 1 ? "s" : ""}.
+                {importResult.skipped
+                  ? ` Skipped ${importResult.skipped} duplicate${importResult.skipped !== 1 ? "s" : ""}.`
+                  : ""}
               </p>
               {importResult.errors.length > 0 && (
                 <div className="mt-2">

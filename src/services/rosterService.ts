@@ -1,5 +1,5 @@
 import { db } from "../lib/firebase";
-import { collection, doc, getDocs, setDoc, deleteDoc, query, where, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, onSnapshot } from "firebase/firestore";
 
 export interface VoterRosterEntry {
   id: string;
@@ -31,10 +31,23 @@ export const rosterService = {
 
   addVoter: async (data: Omit<VoterRosterEntry, "id" | "hasVoted">) => {
     try {
-      const newDocRef = doc(collection(db, "voter_roster"));
-      const fullData = { ...data, hasVoted: false };
-      await setDoc(newDocRef, fullData);
-      return { data: { id: newDocRef.id, ...fullData }, error: null };
+      const voterEmail = data.voterEmail.trim().toLowerCase();
+      if (!voterEmail.includes("@")) {
+        return { data: null, error: "A valid email address is required." };
+      }
+      // Deterministic id => the same email can never appear twice per election.
+      const id = `voter_${data.electionId}_${voterEmail}`;
+      const ref = doc(db, "voter_roster", id);
+      const existing = await getDoc(ref);
+      const fullData = {
+        electionId: data.electionId,
+        voterEmail,
+        voterName: data.voterName.trim(),
+        // Preserve an existing "hasVoted" flag so re-adding never resets it.
+        hasVoted: existing.exists() ? Boolean(existing.data()?.hasVoted) : false,
+      };
+      await setDoc(ref, fullData);
+      return { data: { id, ...fullData }, error: null };
     } catch (error: any) {
       return { data: null, error: error.message };
     }
@@ -67,19 +80,28 @@ export const rosterService = {
   },
 
   bulkUploadRoster: async (electionId: string, voters: { email: string; name: string }[]) => {
-    // In Firestore, we should ideally use a batch
     try {
-      // NOTE: This could be optimized using writeBatch
+      let inserted = 0;
+      let skipped = 0;
+      const seen = new Set<string>();
       for (const voter of voters) {
-        const newDocRef = doc(collection(db, "voter_roster"));
-        await setDoc(newDocRef, {
+        const email = (voter.email || "").trim().toLowerCase();
+        if (!email.includes("@")) { skipped++; continue; }
+        const id = `voter_${electionId}_${email}`;
+        if (seen.has(id)) { skipped++; continue; } // duplicate inside this file
+        seen.add(id);
+        const ref = doc(db, "voter_roster", id);
+        const existing = await getDoc(ref);
+        const fullData = {
           electionId,
-          voterEmail: voter.email,
-          voterName: voter.name,
-          hasVoted: false
-        });
+          voterEmail: email,
+          voterName: (voter.name || "").trim(),
+          hasVoted: existing.exists() ? Boolean(existing.data()?.hasVoted) : false,
+        };
+        await setDoc(ref, fullData);
+        inserted++;
       }
-      return { data: { success: true }, error: null };
+      return { data: { success: true, inserted, skipped }, error: null };
     } catch (error: any) {
       return { data: null, error: error.message };
     }

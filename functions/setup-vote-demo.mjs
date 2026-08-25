@@ -137,22 +137,36 @@ async function main() {
 
   // 5. CSV roster + voter accounts
   const csvPath = join(process.cwd(), "..", "scripts", "demo-voters.csv");
-  const lines = readFileSync(csvPath, "utf8").split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(1);
-  const batch = db.batch();
-  for (const line of lines) {
+  const rawLines = readFileSync(csvPath, "utf8").split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(1);
+  // Dedupe by email so the same voter can never appear twice.
+  const seen = new Set();
+  const rosterRows = [];
+  for (const line of rawLines) {
     const [email, name] = line.split(",");
-    const ref = db.collection("voter_roster").doc();
-    batch.set(ref, { electionId: EID, voterEmail: email.trim().toLowerCase(), voterName: (name || "").trim(), hasVoted: false });
+    const e = email.trim().toLowerCase();
+    if (!e || seen.has(e)) continue;
+    seen.add(e);
+    rosterRows.push([e, (name || "").trim()]);
+  }
+  // Clear any pre-existing roster rows for this election so reseeds stay clean.
+  const oldRoster = await db.collection("voter_roster").where("electionId", "==", EID).get();
+  const delBatch = db.batch();
+  oldRoster.docs.forEach((d) => delBatch.delete(d.ref));
+  await retry(() => delBatch.commit(), "rosterClear");
+  const batch = db.batch();
+  for (const [email, name] of rosterRows) {
+    const id = `voter_${EID}_${email}`;
+    const ref = db.collection("voter_roster").doc(id);
+    batch.set(ref, { electionId: EID, voterEmail: email, voterName: name, hasVoted: false });
   }
   await retry(() => batch.commit(), "rosterBatch");
-  console.log(`roster imported: ${lines.length} voters`);
+  console.log(`roster imported: ${rosterRows.length} voters`);
 
-  for (const line of lines) {
-    const [email, name] = line.split(",");
-    await upsertUser(email, "VOTER", (name || "").trim(), false); // roster-based login, not the general register
+  for (const [email, name] of rosterRows) {
+    await upsertUser(email, "VOTER", name, false); // roster-based login, not the general register
     await sleep(250);
   }
-  console.log(`voter accounts created: ${lines.length}`);
+  console.log(`voter accounts created: ${rosterRows.length}`);
 
   // 6. Re-assert staff claims last (win any race with onUserCreated trigger)
   await sleep(1500);
