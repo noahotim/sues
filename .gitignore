@@ -2,3 +2,12 @@ node_modules/
 .env
 dev.log
 dev.err.log
+
+# Firebase Emulator Suite
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+emu-run.log
+emu-run.err.log
+e2e-emulator.log
+
