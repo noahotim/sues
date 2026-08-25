@@ -2,6 +2,7 @@ import { auth, db, functions } from "../lib/firebase";
 import { collection, doc, getDocs, getDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { isValidStudentEmail, STUDENT_EMAIL_ERROR } from "../utils/emailValidation";
 
 export interface UserProfile {
   id: string;
@@ -15,11 +16,11 @@ export const authService = {
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
-      // Validate domain if needed, e.g.
-      // if (!result.user.email?.endsWith("@sun.ac.ug")) {
-      //   await signOut(auth);
-      //   throw new Error("Only @sun.ac.ug emails are allowed");
-      // }
+      // Only @sun.ac.ug student emails (number starting 220-260) may use the app.
+      if (!isValidStudentEmail(result.user.email)) {
+        await signOut(auth);
+        return { user: null, error: STUDENT_EMAIL_ERROR };
+      }
       return { user: result.user, error: null };
     } catch (error: any) {
       return { user: null, error: error.message };
