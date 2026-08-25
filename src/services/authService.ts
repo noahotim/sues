@@ -16,11 +16,33 @@ export const authService = {
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
-      // Only @sun.ac.ug student emails (number starting 220-260) may use the app.
-      if (!isValidStudentEmail(result.user.email)) {
+      const email = (result.user.email || "").toLowerCase();
+
+      // Gate 1: only @sun.ac.ug student emails (number starting 220-260).
+      if (!isValidStudentEmail(email)) {
         await signOut(auth);
         return { user: null, error: STUDENT_EMAIL_ERROR };
       }
+
+      // Gate 2: the email must be on the eligible-voters allowlist
+      // (imported from the committee's CSV into eligible_emails/<email>).
+      // The rules allow looking up a single address but never listing all of
+      // them. While no list has been imported yet this lookup simply misses
+      // and the Cloud Function decides - so nobody is locked out early.
+      try {
+        const allowed = await getDoc(doc(db, "eligible_emails", email));
+        if (!allowed.exists()) {
+          await signOut(auth);
+          return {
+            user: null,
+            error: "This email is not on the eligible voters list. Contact the electoral committee.",
+          };
+        }
+      } catch {
+        // Could not read the allowlist (offline / rules change): let the
+        // server-side trigger make the final decision.
+      }
+
       return { user: result.user, error: null };
     } catch (error: any) {
       return { user: null, error: error.message };
