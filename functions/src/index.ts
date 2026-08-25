@@ -73,8 +73,9 @@ export const onUserCreated = functions.auth.user().onCreate(async (user) => {
     await usersRef.doc(user.uid).set({
       email: user.email || "",
       fullName: user.displayName || "Unknown User",
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+      role, // mirrored from the custom claim for doc-based reads (user lists)
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
   } catch (error) {
