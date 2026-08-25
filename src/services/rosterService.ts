@@ -1,5 +1,5 @@
 import { db } from "../lib/firebase";
-import { collection, doc, getDocs, setDoc, deleteDoc, query, where, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDocs, setDoc, deleteDoc, query, where, onSnapshot, writeBatch } from "firebase/firestore";
 
 export interface VoterRosterEntry {
   id: string;
@@ -50,18 +50,27 @@ export const rosterService = {
   },
 
   bulkUploadRoster: async (electionId: string, voters: { email: string; name: string }[]) => {
-    // In Firestore, we should ideally use a batch
+    // Batched writes: one commit per 400 rows (Firestore batch limit is 500).
     try {
-      // NOTE: This could be optimized using writeBatch
+      const batches: ReturnType<typeof writeBatch>[] = [];
+      let current = writeBatch(db);
+      let ops = 0;
       for (const voter of voters) {
-        const newDocRef = doc(collection(db, "voter_roster"));
-        await setDoc(newDocRef, {
+        current.set(doc(collection(db, "voter_roster")), {
           electionId,
-          voterEmail: voter.email,
+          voterEmail: voter.email.toLowerCase(),
           voterName: voter.name,
-          hasVoted: false
+          hasVoted: false,
         });
+        ops += 1;
+        if (ops === 400) {
+          batches.push(current);
+          current = writeBatch(db);
+          ops = 0;
+        }
       }
+      if (ops > 0) batches.push(current);
+      await Promise.all(batches.map((b) => b.commit()));
       return { data: { success: true }, error: null };
     } catch (error: any) {
       return { data: null, error: error.message };

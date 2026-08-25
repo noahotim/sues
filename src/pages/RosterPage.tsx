@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, type ChangeEvent } from "react";
 import { Plus, Upload, Trash2, Search, ClipboardCheck, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import {
@@ -100,7 +100,8 @@ export default function RosterPage() {
   }
 
   function parseCsv(text: string): { email: string; name: string }[] {
-    const lines = text.trim().split("\n");
+    // Tolerate a UTF-8 BOM and Windows CRLF line endings.
+    const lines = text.replace(/^\uFEFF/, "").trim().split(/\r?\n/);
     if (lines.length === 0) return [];
     const result: { email: string; name: string }[] = [];
     for (let i = 0; i < lines.length; i++) {
@@ -115,6 +116,17 @@ export default function RosterPage() {
       }
     }
     return result;
+  }
+
+  // Load a .csv file straight from disk into the preview box, where it can
+  // still be edited before importing.
+  async function handleFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    setCsvText(text);
+    setImportResult(null);
+    e.target.value = ""; // allow re-selecting the same file later
   }
 
   async function handleImport() {
@@ -348,9 +360,18 @@ export default function RosterPage() {
       <Modal open={showImport} onClose={() => { setShowImport(false); setImportResult(null); setCsvText(""); }} title="Import Voter Roster (CSV)" maxWidth="max-w-2xl">
         <div className="space-y-4">
           <div>
-            <p className="text-sm text-slate-600 mb-2">
-              Paste CSV data below. Format: <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">email,name</code> — one voter per line.
-            </p>
+            <label className="block cursor-pointer rounded-sm border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center hover:border-primary-400 hover:bg-primary-50 transition-colors">
+              <input
+                type="file"
+                accept=".csv,text/csv,text/plain"
+                onChange={handleFile}
+                className="hidden"
+              />
+              <span className="text-sm font-medium text-primary-900">Choose a CSV file from your computer</span>
+              <span className="block text-xs text-slate-500 mt-1">…or paste the rows below. Format: <code className="bg-slate-100 px-1.5 py-0.5 rounded">email,name</code> — one voter per line.</span>
+            </label>
+          </div>
+          <div>
             <textarea
               value={csvText}
               onChange={(e) => setCsvText(e.target.value)}
