@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "emulators": "firebase emulators:start --project sues-d7a7f",
+    "test:e2e": "node scripts/e2e-emulator.mjs"
   },
   "dependencies": {
     "firebase": "^12.18.0",
