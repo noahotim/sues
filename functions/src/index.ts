@@ -38,14 +38,20 @@ async function allowlistSeeded(): Promise<boolean> {
 export const onUserCreated = functions.auth.user().onCreate(async (user) => {
   try {
     if (await allowlistSeeded()) {
-      // Register is live: membership alone decides.
-      const allowed = await db
-        .collection("eligible_emails")
-        .doc((user.email || "").toLowerCase())
-        .get();
+      // Register is live: membership of the register OR of any election's
+      // voter roster decides (roster voters must be able to sign in).
+      const email = (user.email || "").toLowerCase();
+      const allowed = await db.collection("eligible_emails").doc(email).get();
       if (!allowed.exists) {
-        await rejectUser(user.uid, user.email, "not on the voters register");
-        return;
+        const rosterHit = await db
+          .collection("voter_roster")
+          .where("voterEmail", "==", email)
+          .limit(1)
+          .get();
+        if (rosterHit.empty) {
+          await rejectUser(user.uid, user.email, "not on the voters register or any election roster");
+          return;
+        }
       }
     } else {
       // Bootstrap window: the register has not been imported yet. Accept
