@@ -93,8 +93,9 @@ export default function ResultsPage() {
   }, [selectedElectionId]);
 
   const totalVotesCast = Object.values(voteCounts).reduce((sum, v) => sum + v, 0);
+  const votersVoted = roster.filter((r) => r.hasVoted).length;
   const turnoutPercentage =
-    roster.length > 0 ? Math.round((totalVotesCast / roster.length) * 100) : 0;
+    roster.length > 0 ? Math.round((votersVoted / roster.length) * 100) : 0;
 
   // Build results per position
   const positionResults: PositionResult[] = positions
