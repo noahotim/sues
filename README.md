@@ -7,7 +7,7 @@ An online voting platform built for the **Soroti University Engineering Society 
 - **Role-based access** — Chairperson, Secretary, Polling Assistant, and Voter, with a permission system that controls what each role sees and does.
 - **Election management** — Create elections, configure positions, and manage lifecycle status (draft → active → closed → published).
 - **Candidate management** — Add candidates per position with bio and photo.
-- **Voter roster** — Add eligible voters individually or bulk-import from CSV.
+- **Voter roster** — Add eligible voters individually or bulk-import from a **local CSV file** (read in the browser; the file never leaves the device) or by pasting CSV text.
 - **Secure voting** — Votes are recorded without any voter identifier to preserve anonymity. Duplicate votes are blocked via per-user receipts, and all voting goes through a server-side Cloud Function.
 - **Results** — Live tallies per position with turnout metrics.
 - **Audit trail** — Every privileged action (casting a vote, changing roles) is logged.
@@ -61,6 +61,26 @@ functions/
 | Voter             | Voting only                                                             |
 
 Roles are enforced both in the UI (permission guard) and server-side via Firestore security rules and custom claims set by Cloud Functions. The first user to sign up is automatically assigned the Chairperson role.
+
+## Signing in
+
+Every account uses **Google sign-in**. After authenticating, the system checks whether the email is on the election **register** (`eligible_emails`) or on a **voter roster** — if not, the user is signed back out automatically. Only registered people can enter.
+
+| Person                        | How they sign in                                                                                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Chairperson**               | Google sign-in with their registered `@sun.ac.ug` address (e.g. `chair.sues@sun.ac.ug`). Full admin access.        |
+| **Secretary**                 | Google sign-in with their registered `@sun.ac.ug` address (e.g. `secretary.sues@sun.ac.ug`). Election-manager admin. |
+| **Polling Assistant**         | Google sign-in with their registered `@sun.ac.ug` address. Can manage the roster and vote.                          |
+| **Voter (student)**           | Google sign-in with the exact email imported onto that election's roster via CSV. Voting only.                      |
+
+> **Demo note:** Against the Firebase Emulator Suite, the Auth emulator accepts any password, so the demo accounts (password `sues2026`) work without a real Google account. In production, the real Google account must match the registered email.
+
+### Importing voters from a local CSV file
+
+1. Sign in as an admin (Chairperson/Secretary/Assistant) and open **Voter Roster**.
+2. Select the election, then click **Import CSV**.
+3. Click **Choose a CSV file from your computer** and pick a `.csv` file. The file is parsed locally (supports `email,name` rows, a header row, quotes, and CRLF/BOM).
+4. Review the loaded rows in the text area, then click **Import Voters** to add them to the roster.
 
 ## Cloud Functions
 

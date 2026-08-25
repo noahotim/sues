@@ -48,6 +48,28 @@ export default function LoginPage() {
           <Button onClick={handleGoogleSignIn} disabled={submitting} className="w-full" size="lg">
             {submitting ? "Signing in..." : "Sign in with Google"}
           </Button>
+
+          <details className="text-sm text-slate-600 border-t border-slate-200 pt-4">
+            <summary className="cursor-pointer font-medium text-slate-700 select-none">
+              Who can sign in?
+            </summary>
+            <ul className="mt-3 space-y-2 text-slate-600">
+              <li>
+                <span className="font-medium text-primary-900">Chairperson, Secretary &amp; Assistant</span> —
+                university staff listed on the election register. Sign in with your registered
+                <code className="text-xs bg-slate-100 px-1 py-0.5 rounded mx-1">@sun.ac.ug</code>
+                Google account (e.g. <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">chair.sues@sun.ac.ug</code>).
+              </li>
+              <li>
+                <span className="font-medium text-primary-900">Voters</span> — students imported onto a
+                voter roster via CSV. Sign in with the exact email on that roster.
+              </li>
+              <li className="text-slate-500">
+                Only emails found on the register or a roster are allowed; everyone else is signed out
+                automatically. In this demo the Firebase Auth emulator is used, so any password is accepted.
+              </li>
+            </ul>
+          </details>
         </div>
       </div>
     </div>

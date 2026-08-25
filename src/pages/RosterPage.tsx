@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, type ChangeEvent } from "react";
 import { Plus, Upload, Trash2, Search, ClipboardCheck, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import {
@@ -40,6 +40,7 @@ export default function RosterPage() {
 
   // Import state
   const [csvText, setCsvText] = useState("");
+  const [csvFileName, setCsvFileName] = useState("");
   const [importResult, setImportResult] = useState<{ inserted: number; errors: string[] } | null>(null);
 
   const load = useCallback(async () => {
@@ -99,22 +100,57 @@ export default function RosterPage() {
     }
   }
 
+  function parseCsvLine(line: string): string[] {
+    const out: string[] = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (line[i + 1] === '"') { cur += '"'; i++; } else inQuotes = false;
+        } else {
+          cur += c;
+        }
+      } else if (c === '"') {
+        inQuotes = true;
+      } else if (c === ",") {
+        out.push(cur);
+        cur = "";
+      } else {
+        cur += c;
+      }
+    }
+    out.push(cur);
+    return out.map((s) => s.trim());
+  }
+
   function parseCsv(text: string): { email: string; name: string }[] {
-    const lines = text.trim().split("\n");
+    const normalized = text.replace(/^﻿/, "");
+    const lines = normalized.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (lines.length === 0) return [];
     const result: { email: string; name: string }[] = [];
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-      const parts = line.split(",").map((p) => p.trim());
-      if (parts.length >= 1 && parts[0].includes("@")) {
-        result.push({
-          email: parts[0],
-          name: parts.length >= 2 ? parts[1] : "",
-        });
+      const cells = parseCsvLine(lines[i]);
+      const email = (cells[0] || "").toLowerCase();
+      if (i === 0 && !email.includes("@")) continue; // skip a header row
+      if (email.includes("@")) {
+        result.push({ email, name: cells[1] || "" });
       }
     }
     return result;
+  }
+
+  function handleFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvFileName(file.name);
+    setImportResult(null);
+    const reader = new FileReader();
+    reader.onload = () => setCsvText(String(reader.result || ""));
+    reader.onerror = () =>
+      setImportResult({ inserted: 0, errors: ["Could not read the selected file."] });
+    reader.readAsText(file);
   }
 
   async function handleImport() {
@@ -347,9 +383,34 @@ export default function RosterPage() {
       {/* Import CSV Modal */}
       <Modal open={showImport} onClose={() => { setShowImport(false); setImportResult(null); setCsvText(""); }} title="Import Voter Roster (CSV)" maxWidth="max-w-2xl">
         <div className="space-y-4">
+          <div className="border-2 border-dashed border-slate-300 rounded-sm p-5 text-center bg-slate-50">
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              id="csv-file-input"
+              className="hidden"
+              onChange={handleFile}
+            />
+            <label
+              htmlFor="csv-file-input"
+              className="cursor-pointer inline-flex items-center gap-2 text-sm font-semibold text-primary-900 hover:underline"
+            >
+              <Upload size={16} />
+              Choose a CSV file from your computer
+            </label>
+            {csvFileName && (
+              <p className="text-xs text-slate-600 mt-2">
+                Loaded: <span className="font-medium">{csvFileName}</span>
+              </p>
+            )}
+            <p className="text-xs text-slate-400 mt-1">
+              The file is read locally and never leaves your browser.
+            </p>
+          </div>
+
           <div>
             <p className="text-sm text-slate-600 mb-2">
-              Paste CSV data below. Format: <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">email,name</code> — one voter per line.
+              …or paste CSV data below. Format: <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">email,name</code> — one voter per line.
             </p>
             <textarea
               value={csvText}
