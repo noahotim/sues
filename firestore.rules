@@ -78,8 +78,9 @@ service cloud.firestore {
     match /voter_roster/{rosterId} {
       // Voter can read their own entry. Admins can read all.
       allow read: if isAuthenticated() && (isAdmin() || resource.data.voterEmail == request.auth.token.email);
-      // Only Chairperson & Secretary can manage roster. Assistant can only read (for verification).
-      allow write: if isElectionManager();
+      // Chairperson & Secretary manage the roster; the Polling Assistant may
+      // also update entries during voter check-in / verification.
+      allow write: if isElectionManager() || isAssistant();
     }
 
     // Eligible-voter allowlist (imported from CSV by the admin script).
