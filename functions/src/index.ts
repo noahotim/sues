@@ -1,10 +1,11 @@
-import * as admin from "firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+﻿import { initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as functions from "firebase-functions/v1";
 
-admin.initializeApp();
-const db = admin.firestore();
+initializeApp();
+const db = getFirestore();
 
 // Normalize a start/end time that may be a Firestore Timestamp or an ISO string.
 function toDate(value: any): Date | null {
@@ -18,7 +19,7 @@ function toDate(value: any): Date | null {
 async function rejectUser(uid: string, email: string | undefined, reason: string) {
   console.warn(`Rejecting signup (${reason}):`, email);
   try {
-    await admin.auth().deleteUser(uid);
+    await getAuth().deleteUser(uid);
   } catch (deleteError) {
     console.error("Failed to delete rejected user:", deleteError);
   }
@@ -67,15 +68,15 @@ export const onUserCreated = functions.auth.user().onCreate(async (user) => {
     }
 
     // Assign custom claim
-    await admin.auth().setCustomUserClaims(user.uid, { role });
+    await getAuth().setCustomUserClaims(user.uid, { role });
 
     // Create user document
     await usersRef.doc(user.uid).set({
       email: user.email || "",
       fullName: user.displayName || "Unknown User",
       role, // mirrored from the custom claim for doc-based reads (user lists)
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
   } catch (error) {
@@ -198,7 +199,7 @@ export const setUserRole = onCall(async (request) => {
   }
 
   // Assign the new role
-  await admin.auth().setCustomUserClaims(targetUid, { role: targetRole });
+  await getAuth().setCustomUserClaims(targetUid, { role: targetRole });
 
   // Update user doc for UI purposes
   await db.collection("users").doc(targetUid).update({
@@ -219,3 +220,4 @@ export const setUserRole = onCall(async (request) => {
 
   return { success: true };
 });
+
