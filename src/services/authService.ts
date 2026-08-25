@@ -2,7 +2,6 @@ import { auth, db, functions } from "../lib/firebase";
 import { collection, doc, getDocs, getDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { isValidStudentEmail, STUDENT_EMAIL_ERROR } from "../utils/emailValidation";
 
 export interface UserProfile {
   id: string;
@@ -18,28 +17,25 @@ export const authService = {
       const result = await signInWithPopup(auth, provider);
       const email = (result.user.email || "").toLowerCase();
 
-      // Gate 1: only @sun.ac.ug student emails (number starting 220-260).
-      if (!isValidStudentEmail(email)) {
-        await signOut(auth);
-        return { user: null, error: STUDENT_EMAIL_ERROR };
-      }
-
-      // Gate 2: the email must be on the eligible-voters allowlist
-      // (imported from the committee's CSV into eligible_emails/<email>).
-      // The rules allow looking up a single address but never listing all of
-      // them. While no list has been imported yet this lookup simply misses
-      // and the Cloud Function decides - so nobody is locked out early.
+      // THE eligibility rule: once the voters register has been imported
+      // (eligible_emails/_meta exists), the email must be on it. The rules
+      // allow looking up a single address but never listing all of them.
+      // Until the register is imported the Cloud Function decides instead,
+      // so nobody is locked out early.
       try {
-        const allowed = await getDoc(doc(db, "eligible_emails", email));
-        if (!allowed.exists()) {
-          await signOut(auth);
-          return {
-            user: null,
-            error: "This email is not on the eligible voters list. Contact the electoral committee.",
-          };
+        const meta = await getDoc(doc(db, "eligible_emails", "_meta"));
+        if (meta.exists()) {
+          const allowed = await getDoc(doc(db, "eligible_emails", email));
+          if (!allowed.exists()) {
+            await signOut(auth);
+            return {
+              user: null,
+              error: "This email is not on the voters register. Contact the electoral committee.",
+            };
+          }
         }
       } catch {
-        // Could not read the allowlist (offline / rules change): let the
+        // Could not read the register (offline / rules change): let the
         // server-side trigger make the final decision.
       }
 
