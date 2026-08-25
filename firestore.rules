@@ -51,9 +51,13 @@ service cloud.firestore {
 
     // Elections
     match /elections/{electionId} {
-      // Voters can read active, closed, or published elections
-      allow read: if isAuthenticated() && 
-                  (isAdmin() || resource.data.status in ['active', 'closed', 'published']);
+      // Any signed-in user may list elections. The client filters by status
+      // (e.g. only active elections are shown to voters), and the positions/
+      // candidates rules below still gate readable content by election status.
+      // NOTE: a per-document status filter here would reject the unconstrained
+      // list query (orderBy) used by the app, so reads are granted to any
+      // authenticated user instead.
+      allow read: if isAuthenticated();
       allow write: if isElectionManager();
     }
 
