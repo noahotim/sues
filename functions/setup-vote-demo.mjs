@@ -109,7 +109,20 @@ async function main() {
   await retry(() => db.collection("positions").doc(SEC).set({ electionId: EID, title: "Secretary", description: "Society Secretary", maxVotes: 1, displayOrder: 2 }), "pos_secretary");
   console.log("positions created: President, Secretary");
 
-  // 4. Candidates
+  // 4. Candidates (with placeholder photo avatars so the booth shows images)
+  const avatarColors = {
+    "cand_pres1": "#1e3a8a",
+    "cand_pres2": "#0f766e",
+    "cand_sec1": "#9333ea",
+    "cand_sec2": "#b45309",
+  };
+  const makeAvatar = (name, color) => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240">` +
+      `<rect width="240" height="240" fill="${color}"/>` +
+      `<text x="50%" y="50%" font-size="110" fill="#ffffff" text-anchor="middle" ` +
+      `dominant-baseline="central" font-family="sans-serif" font-weight="700">${name.charAt(0).toUpperCase()}</text></svg>`;
+    return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+  };
   const candidates = [
     ["cand_pres1", "Otim James", "Dedicated leader for SUES.", PRES, 1],
     ["cand_pres2", "Okeelo", "Committed to progress.", PRES, 2],
@@ -117,7 +130,8 @@ async function main() {
     ["cand_sec2", "Otime", "Strong communicator.", SEC, 2],
   ];
   for (const [id, name, bio, pid, order] of candidates) {
-    await retry(() => db.collection("candidates").doc(id).set({ electionId: EID, positionId: pid, name, bio, photoUrl: "", displayOrder: order }), `candidate ${id}`);
+    const photoUrl = makeAvatar(name, avatarColors[id] || "#334155");
+    await retry(() => db.collection("candidates").doc(id).set({ electionId: EID, positionId: pid, name, bio, photoUrl, displayOrder: order }), `candidate ${id}`);
   }
   console.log("candidates created: " + candidates.map((c) => c[1]).join(", "));
 

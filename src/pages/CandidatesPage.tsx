@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { Plus, Users, Trash2 } from "lucide-react";
+import { useEffect, useState, useCallback, type ChangeEvent } from "react";
+import { Plus, Users, Trash2, Pencil, Image as ImageIcon } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import {
   electionService,
@@ -34,12 +34,83 @@ export default function CandidatesPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Candidate | null>(null);
 
-  // Add form state
+  // Add/Edit form state
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState("");
   const [positionId, setPositionId] = useState("");
+  const [editing, setEditing] = useState<Candidate | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  function resetForm() {
+    setName("");
+    setBio("");
+    setPhotoUrl("");
+    setPhotoFile(null);
+    setPhotoPreview("");
+    setPositionId("");
+    setEditing(null);
+  }
+
+  function openEdit(cand: Candidate) {
+    setEditing(cand);
+    setName(cand.name);
+    setBio(cand.bio);
+    setPhotoUrl(cand.photoUrl || "");
+    setPhotoFile(null);
+    setPhotoPreview("");
+    setPositionId(cand.positionId);
+  }
+
+  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] || null;
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoFile(file);
+    setPhotoPreview(file ? URL.createObjectURL(file) : "");
+  }
+
+  async function handleSave() {
+    setSubmitting(true);
+    try {
+      let finalPhotoUrl = photoUrl;
+      if (photoFile) {
+        const up = await candidateService.uploadCandidatePhoto(photoFile);
+        if (up.error) throw new Error(up.error);
+        finalPhotoUrl = up.data?.path || "";
+        // Remove the previous photo if we replaced it
+        if (editing?.photoUrl && editing.photoUrl !== finalPhotoUrl) {
+          await candidateService.deleteCandidatePhoto(editing.photoUrl);
+        }
+      }
+      if (editing) {
+        await candidateService.updateCandidate(editing.id, {
+          name,
+          bio,
+          positionId,
+          photoUrl: finalPhotoUrl,
+        });
+      } else {
+        await candidateService.createCandidate({
+          electionId: selectedElectionId,
+          positionId,
+          name,
+          bio,
+          photoUrl: finalPhotoUrl,
+          displayOrder: candidates.length,
+        });
+      }
+      setShowAdd(false);
+      resetForm();
+      const candRes = await candidateService.getCandidates(selectedElectionId);
+      if (candRes.data) setCandidates(candRes.data);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to save candidate");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -84,34 +155,12 @@ export default function CandidatesPage() {
     })();
   }, [selectedElectionId]);
 
-  async function handleAdd() {
-    setSubmitting(true);
-    try {
-      await candidateService.createCandidate({
-        electionId: selectedElectionId,
-        positionId,
-        name,
-        bio,
-        photoUrl,
-        displayOrder: candidates.length,
-      });
-      setShowAdd(false);
-      setName("");
-      setBio("");
-      setPhotoUrl("");
-      setPositionId("");
-      const candRes = await candidateService.getCandidates(selectedElectionId);
-      if (candRes.data) setCandidates(candRes.data);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to add candidate");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   async function handleDelete() {
     if (!deleteTarget) return;
     try {
+      if (deleteTarget.photoUrl) {
+        await candidateService.deleteCandidatePhoto(deleteTarget.photoUrl);
+      }
       await candidateService.deleteCandidate(deleteTarget.id);
       const candRes = await candidateService.getCandidates(selectedElectionId);
       if (candRes.data) setCandidates(candRes.data);
@@ -132,7 +181,7 @@ export default function CandidatesPage() {
           <p className="text-sm text-slate-600 mt-2">Manage candidates for each election and position.</p>
         </div>
         {canManage && elections.length > 0 && (
-          <Button onClick={() => setShowAdd(true)} disabled={!selectedElectionId || positions.length === 0}>
+          <Button onClick={() => { resetForm(); setShowAdd(true); }} disabled={!selectedElectionId || positions.length === 0}>
             <Plus size={18} />
             Add Candidate
           </Button>
@@ -228,14 +277,24 @@ export default function CandidatesPage() {
                           <p className="text-sm text-slate-600 mt-1 line-clamp-2 leading-relaxed">{cand.bio}</p>
                         )}
                       </div>
-                      {canManage && (
-                        <button
-                          onClick={() => setDeleteTarget(cand)}
-                          className="text-slate-300 hover:text-error-600 transition-colors flex-shrink-0"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
+                       {canManage && (
+                         <div className="flex items-center gap-1 flex-shrink-0">
+                           <button
+                             onClick={() => openEdit(cand)}
+                             className="text-slate-300 hover:text-primary-900 transition-colors"
+                             title="Edit candidate"
+                           >
+                             <Pencil size={16} />
+                           </button>
+                           <button
+                             onClick={() => setDeleteTarget(cand)}
+                             className="text-slate-300 hover:text-error-600 transition-colors"
+                             title="Delete candidate"
+                           >
+                             <Trash2 size={16} />
+                           </button>
+                         </div>
+                       )}
                     </div>
                   ))}
                 </div>
@@ -245,8 +304,12 @@ export default function CandidatesPage() {
         </div>
       )}
 
-      {/* Add Candidate Modal */}
-      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Candidate">
+      {/* Add / Edit Candidate Modal */}
+      <Modal
+        open={showAdd || !!editing}
+        onClose={() => { setShowAdd(false); resetForm(); }}
+        title={editing ? "Edit Candidate" : "Add Candidate"}
+      >
         <div className="space-y-4">
           <Select
             label="Position"
@@ -270,18 +333,53 @@ export default function CandidatesPage() {
             placeholder="Brief biography or statement..."
             rows={3}
           />
+
+          {/* Photo upload */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Photo
+            </label>
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 rounded-sm border border-slate-200 bg-slate-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                {photoPreview || photoUrl ? (
+                  <img
+                    src={photoPreview || photoUrl}
+                    alt="preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <ImageIcon size={28} className="text-slate-400" />
+                )}
+              </div>
+              <div className="flex-1">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="block w-full text-sm text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-sm file:border-0 file:bg-primary-900 file:text-white file:cursor-pointer hover:file:bg-primary-800"
+                />
+                <p className="text-xs text-slate-400 mt-2">
+                  Upload an image (JPG/PNG, max 5MB). Or paste a URL below.
+                </p>
+              </div>
+            </div>
+          </div>
           <Input
-            label="Photo URL"
+            label="Photo URL (optional)"
             value={photoUrl}
             onChange={setPhotoUrl}
             placeholder="https://..."
           />
+
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setShowAdd(false)}>
+            <Button
+              variant="secondary"
+              onClick={() => { setShowAdd(false); resetForm(); }}
+            >
               Cancel
             </Button>
-            <Button onClick={handleAdd} disabled={submitting || !name || !positionId}>
-              {submitting ? "Adding..." : "Add Candidate"}
+            <Button onClick={handleSave} disabled={submitting || !name || !positionId}>
+              {submitting ? "Saving..." : editing ? "Save Changes" : "Add Candidate"}
             </Button>
           </div>
         </div>

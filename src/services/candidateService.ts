@@ -72,7 +72,8 @@ export const candidateService = {
 
   deleteCandidatePhoto: async (url: string) => {
     try {
-      if (url.includes("firebase")) {
+      // Skip non-storage values (e.g. data: URL placeholders)
+      if (url && !url.startsWith("data:")) {
         const storageRef = ref(storage, url);
         await deleteObject(storageRef);
       }
