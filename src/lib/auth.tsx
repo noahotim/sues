@@ -36,8 +36,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadUserData(firebaseUser: FirebaseUser) {
     try {
-      // Get the ID token result to extract the custom claim
-      const idTokenResult = await firebaseUser.getIdTokenResult(true);
+      // Brand-new accounts: the onCreate trigger provisions the custom role
+      // claim moments after the very first sign-in. Force-refresh until it
+      // lands (max ~8s) so the correct navigation renders right away instead
+      // of silently falling back to Voter.
+      let idTokenResult = await firebaseUser.getIdTokenResult(true);
+      for (let i = 0; i < 12 && !idTokenResult.claims.role; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 650));
+        idTokenResult = await firebaseUser.getIdTokenResult(true);
+      }
       const userRoleStr = (idTokenResult.claims.role as string) || "VOTER";
 
       const userRole = ROLES.find((r) => r.id === userRoleStr) ?? ROLES.find(r => r.id === "VOTER")!;
