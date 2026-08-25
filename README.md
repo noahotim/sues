@@ -8,6 +8,7 @@ An online voting platform built for the **Soroti University Engineering Society 
 - **Election management** — Create elections, configure positions, and manage lifecycle status (draft → active → closed → published).
 - **Candidate management** — Add candidates per position with bio and photo.
 - **Voter roster** — Add eligible voters individually or bulk-import from CSV.
+- **Register-gated sign-in** — Only emails on the voters register (imported from the electoral committee's CSV) can sign in; anyone else is turned away at login and their account is removed server-side.
 - **Secure voting** — Votes are recorded without any voter identifier to preserve anonymity. Duplicate votes are blocked via per-user receipts, and all voting goes through a server-side Cloud Function.
 - **Results** — Live tallies per position with turnout metrics.
 - **Audit trail** — Every privileged action (casting a vote, changing roles) is logged.
@@ -64,11 +65,32 @@ Roles are enforced both in the UI (permission guard) and server-side via Firesto
 
 ## Cloud Functions
 
-- `onUserCreated` — creates the user profile document and assigns a default role on sign-up.
+- `onUserCreated` — creates the user profile document and assigns a default role on sign-up. It also enforces voter eligibility: once the register is imported, any account whose email is not on it is deleted.
 - `castVote` — validates the election is active, the position/candidate belong to it, the voter is on the roster, and the voter has not already voted for that position. Writes the anonymous vote, a per-user receipt, updates the roster, and appends an audit log in a single transaction.
 - `setUserRole` — lets the Chairperson assign roles (via custom claims).
 
 The Firestore security rules forbid direct client writes to `votes` and `audit_logs`; all sensitive writes go through the Cloud Functions.
+
+## Voter Eligibility & the Register
+
+There is exactly **one rule** for signing in: *the Google account's email must be on the voters register.* The register lives in Firestore under `eligible_emails/<email>` and is imported from a CSV by the election committee.
+
+### Importing the register (CSV)
+
+1. Download a service-account key: Firebase Console → Project settings → Service accounts → *Generate new private key*.
+2. Put the eligible emails in a CSV file — one per line or comma-separated; header rows are ignored automatically.
+3. Run:
+
+   ```bash
+   npm install
+   npm run import:emails -- emails.csv /path/to/service-account.json
+   ```
+
+The import normalizes addresses to lowercase, writes each one as a document, and marks the register as live (`eligible_emails/_meta`). From that moment sign-in is restricted to exactly those emails — enforced in the login flow and again by the `onUserCreated` Cloud Function, which deletes any account that is not on the register so it can never be used to vote.
+
+> **Bootstrap window:** until the CSV has been imported (register still empty), only `@sun.ac.ug` addresses are accepted. This prevents outsiders from creating the first account, which automatically becomes the Chairperson.
+
+Being on the register gets you into the app; casting a ballot additionally requires being on that election's voter roster. For privacy, the security rules let a signed-in user check a single email but never list or write the register, so the full roll cannot be scraped from the client.
 
 ## Scripts
 
@@ -78,6 +100,9 @@ The Firestore security rules forbid direct client writes to `votes` and `audit_l
 | `npm run build`                  | Type-check and build the frontend  |
 | `npm run preview`                | Preview the production build       |
 | `npm run typecheck`              | Run the TypeScript type checker    |
+| `npm run emulators`              | Start the Firebase Emulator Suite  |
+| `npm run test:e2e`               | End-to-end voting check against the emulators |
+| `npm run import:emails -- emails.csv sa.json` | Import the voters register from a CSV |
 | `cd functions && npm run build`  | Compile the Cloud Functions        |
 | `cd functions && npm run deploy` | Deploy the Cloud Functions         |
 
@@ -117,6 +142,7 @@ Contributions are welcome. Please follow the standard fork-and-pull-request work
 
 ## Security Notes
 
+- Sign-in is restricted to the **voters register** (`eligible_emails`); the rules expose single-email lookups only, never the full roll.
 - Votes are stored **anonymously** — no voter ID is attached to a vote document.
 - Double voting is prevented by receipts and roster flags, enforced inside a transaction.
 - Audit logs are read-only via the rules and only visible to the Chairperson.
