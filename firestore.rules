@@ -82,6 +82,15 @@ service cloud.firestore {
       allow write: if isElectionManager();
     }
 
+    // Eligible-voter allowlist (imported from CSV by the admin script).
+    // Members can look up a single email before signing in, but nobody can
+    // enumerate the collection; all writes go through the Admin SDK.
+    match /eligible_emails/{email} {
+      allow get: if isAuthenticated();
+      allow list: if false;
+      allow write: if false;
+    }
+
     // Votes
     match /votes/{voteId} {
       // Only admins can read all votes for tallying. Votes do NOT contain voter_id to ensure anonymity.

@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as functions from "firebase-functions/v1";
 
@@ -22,19 +23,44 @@ function isValidStudentEmail(email?: string | null): boolean {
   return prefix >= 220 && prefix <= 260;
 }
 
+// Reject and delete an account that may not sign in.
+async function rejectUser(uid: string, email: string | undefined, reason: string) {
+  console.warn(`Rejecting signup (${reason}):`, email);
+  try {
+    await admin.auth().deleteUser(uid);
+  } catch (deleteError) {
+    console.error("Failed to delete rejected user:", deleteError);
+  }
+}
+
+// True when the chairperson has seeded the eligible_emails allowlist.
+// While the list is empty we fall back to the format check only, so nobody
+// is locked out before the CSV has been imported.
+async function allowlistSeeded(): Promise<boolean> {
+  const seed = await db.collection("eligible_emails").limit(1).get();
+  return !seed.empty;
+}
+
 // 1. Trigger: Auto-create user document & assign default role on sign up
 export const onUserCreated = functions.auth.user().onCreate(async (user) => {
   try {
-    // Reject any account that is not a valid @sun.ac.ug student email.
-    // We delete it so it can never be used to sign in or vote.
+    // Gate 1: must be a valid @sun.ac.ug student email (number starting 220-260).
     if (!isValidStudentEmail(user.email)) {
-      console.warn("Rejecting non-student email signup:", user.email);
-      try {
-        await admin.auth().deleteUser(user.uid);
-      } catch (deleteError) {
-        console.error("Failed to delete rejected user:", deleteError);
-      }
+      await rejectUser(user.uid, user.email, "not a valid student email");
       return;
+    }
+
+    // Gate 2: once seeded, the email must appear in the eligible_emails
+    // allowlist (imported from the electoral committee's CSV).
+    if (await allowlistSeeded()) {
+      const allowed = await db
+        .collection("eligible_emails")
+        .doc((user.email || "").toLowerCase())
+        .get();
+      if (!allowed.exists) {
+        await rejectUser(user.uid, user.email, "not on the eligible voters list");
+        return;
+      }
     }
 
     const usersRef = db.collection("users");
@@ -54,8 +80,8 @@ export const onUserCreated = functions.auth.user().onCreate(async (user) => {
     await usersRef.doc(user.uid).set({
       email: user.email || "",
       fullName: user.displayName || "Unknown User",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
   } catch (error) {
@@ -137,14 +163,14 @@ export const castVote = onCall(async (request) => {
       electionId,
       positionId,
       candidateId,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     // Insert receipt
     transaction.set(receiptRef, {
       electionId,
       positionId,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     // Mark roster as has_voted = true
@@ -158,7 +184,7 @@ export const castVote = onCall(async (request) => {
       entityType: "vote",
       entityId: candidateId,
       details: { electionId, positionId },
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     return { success: true };
@@ -183,7 +209,7 @@ export const setUserRole = onCall(async (request) => {
   // Update user doc for UI purposes
   await db.collection("users").doc(targetUid).update({
     role: targetRole, // for easy frontend querying
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    updatedAt: FieldValue.serverTimestamp()
   });
 
   // Audit log
@@ -194,7 +220,7 @@ export const setUserRole = onCall(async (request) => {
     entityType: "user",
     entityId: targetUid,
     details: { targetRole },
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   });
 
   return { success: true };
