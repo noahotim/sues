@@ -79,6 +79,15 @@ async function upsertUser(email, role, name, addToRegister) {
 }
 
 async function main() {
+  // 0. Wipe stale demo data so a reseed is deterministic and consistent
+  //    (e.g. an orphan election with no positions/candidates must not linger).
+  for (const col of ["elections", "positions", "candidates", "voter_roster", "votes", "audit_logs"]) {
+    const snap = await db.collection(col).get();
+    const b = db.batch();
+    snap.docs.forEach((d) => b.delete(d.ref));
+    if (!snap.empty) await retry(() => b.commit(), `wipe ${col}`);
+  }
+
   // 1. Base staff accounts (on the allowed register so they can log in)
   for (const [email, role, name] of baseAccounts) {
     await upsertUser(email, role, name, true);
