@@ -72,7 +72,7 @@ export default function DashboardPage() {
       color: "primary",
     },
     {
-      label: "Votes Cast",
+      label: "Voters Voted",
       value: metrics.totalVotesCast,
       icon: <CheckCircle2 size={20} />,
       color: "success",

@@ -1,5 +1,5 @@
 import { db } from "../lib/firebase";
-import { collection, getDocs, getCountFromServer } from "firebase/firestore";
+import { collection, getDocs, getCountFromServer, query, where } from "firebase/firestore";
 
 export interface DashboardMetrics {
   totalElections: number;
@@ -19,10 +19,15 @@ export const dashboardService = {
 
       const candidatesCount = await getCountFromServer(collection(db, "candidates"));
       const votersCount = await getCountFromServer(collection(db, "voter_roster"));
-      const votesCount = await getCountFromServer(collection(db, "votes"));
+      const votersVotedCount = await getCountFromServer(
+        query(collection(db, "voter_roster"), where("hasVoted", "==", true))
+      );
 
       const totalEligibleVoters = votersCount.data().count;
-      const totalVotesCast = votesCount.data().count;
+      // "Votes cast" = distinct voters who cast a ballot. A single ballot contains
+      // one selection per position, so counting raw vote records would overstate
+      // turnout (e.g. 5 voters x 2 positions = 10 records -> false 200%).
+      const totalVotesCast = votersVotedCount.data().count;
       const turnoutPercentage = totalEligibleVoters > 0 
         ? Math.round((totalVotesCast / totalEligibleVoters) * 100) 
         : 0;

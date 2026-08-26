@@ -21,7 +21,9 @@ export function PermissionGuard({
   }
 
   if (!permissions.includes(permission)) {
-    return <Navigate to="/admin/dashboard" replace />;
+    // Voters have no admin access at all -> send them to the voting booth.
+    // Admins lacking a specific permission -> back to the dashboard.
+    return <Navigate to={permissions.includes("VIEW_DASHBOARD") ? "/admin/dashboard" : "/vote"} replace />;
   }
 
   return <>{children}</>;

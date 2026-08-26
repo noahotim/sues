@@ -92,7 +92,6 @@ export default function ResultsPage() {
     })();
   }, [selectedElectionId]);
 
-  const totalVotesCast = Object.values(voteCounts).reduce((sum, v) => sum + v, 0);
   const votersVoted = roster.filter((r) => r.hasVoted).length;
   const turnoutPercentage =
     roster.length > 0 ? Math.round((votersVoted / roster.length) * 100) : 0;
@@ -179,8 +178,8 @@ export default function ResultsPage() {
               <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mt-1">Eligible Voters</p>
             </Card>
             <Card className="p-5 rounded-sm shadow-none border-l-4 border-l-primary-900">
-              <p className="text-3xl font-extrabold text-primary-900 tracking-tight">{totalVotesCast}</p>
-              <p className="text-xs font-bold uppercase tracking-widest text-primary-900 mt-1">Votes Cast</p>
+              <p className="text-3xl font-extrabold text-primary-900 tracking-tight">{votersVoted}</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-primary-900 mt-1">Voters Voted</p>
             </Card>
             <Card className="p-5 rounded-sm shadow-none border-l-4 border-l-success-600">
               <p className="text-3xl font-extrabold text-success-600 tracking-tight">{turnoutPercentage}%</p>
