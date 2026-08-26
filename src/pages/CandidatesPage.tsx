@@ -41,6 +41,7 @@ export default function CandidatesPage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState("");
   const [positionId, setPositionId] = useState("");
+  const [newPositionTitle, setNewPositionTitle] = useState("");
   const [editing, setEditing] = useState<Candidate | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -51,6 +52,7 @@ export default function CandidatesPage() {
     setPhotoFile(null);
     setPhotoPreview("");
     setPositionId("");
+    setNewPositionTitle("");
     setEditing(null);
   }
 
@@ -74,6 +76,24 @@ export default function CandidatesPage() {
   async function handleSave() {
     setSubmitting(true);
     try {
+      // If the user chose "+ Create new position", make it first.
+      let posId = positionId;
+      if (posId === "__new") {
+        const title = newPositionTitle.trim();
+        if (!title) throw new Error("Enter a name for the new position.");
+        const np = await electionService.createPosition({
+          electionId: selectedElectionId,
+          title,
+          description: "",
+          maxVotes: 1,
+          displayOrder: positions.length,
+        });
+        if (np.error) throw new Error(np.error);
+        posId = np.data?.id || "";
+        if (np.data) setPositions((prev) => [...prev, np.data as Position]);
+        setPositionId(posId);
+      }
+
       let finalPhotoUrl = photoUrl;
       if (photoFile) {
         const up = await candidateService.uploadCandidatePhoto(photoFile);
@@ -88,13 +108,13 @@ export default function CandidatesPage() {
         await candidateService.updateCandidate(editing.id, {
           name,
           bio,
-          positionId,
+          positionId: posId,
           photoUrl: finalPhotoUrl,
         });
       } else {
         await candidateService.createCandidate({
           electionId: selectedElectionId,
-          positionId,
+          positionId: posId,
           name,
           bio,
           photoUrl: finalPhotoUrl,
@@ -182,7 +202,7 @@ export default function CandidatesPage() {
           <p className="text-sm text-slate-600 mt-2">Manage candidates for each election and position.</p>
         </div>
         {canManage && elections.length > 0 && (
-          <Button onClick={() => { resetForm(); setShowAdd(true); }} disabled={!selectedElectionId || positions.length === 0}>
+          <Button onClick={() => { resetForm(); setShowAdd(true); }} disabled={!selectedElectionId}>
             <Plus size={18} />
             Add Candidate
           </Button>
@@ -216,23 +236,19 @@ export default function CandidatesPage() {
             message="Choose an election above to view and manage its candidates."
           />
         </Card>
-      ) : positions.length === 0 ? (
-        <Card className="p-6">
-          <EmptyState
-            icon={<Users size={48} />}
-            title="No positions configured"
-            message="This election has no positions yet. Configure positions in the Elections page first."
-          />
-        </Card>
-      ) : candidates.length === 0 ? (
+      ) : positions.length === 0 || candidates.length === 0 ? (
         <Card className="p-6">
           <EmptyState
             icon={<Users size={48} />}
             title="No candidates yet"
-            message="Add candidates for the positions in this election."
+            message={
+              positions.length === 0
+                ? "This election has no positions yet. Use \"Add Candidate\" and create a position right there."
+                : "Add candidates for the positions in this election."
+            }
             action={
               canManage && (
-                <Button onClick={() => setShowAdd(true)}>
+                <Button onClick={() => { resetForm(); setShowAdd(true); }}>
                   <Plus size={18} />
                   Add Candidate
                 </Button>
@@ -316,10 +332,27 @@ export default function CandidatesPage() {
             label="Position"
             value={positionId}
             onChange={setPositionId}
-            options={positions.map((p) => ({ value: p.id, label: p.title }))}
-            placeholder="Select a position..."
+            options={[
+              ...positions.map((p) => ({ value: p.id, label: p.title })),
+              { value: "__new", label: "+ Create new position" },
+            ]}
+            placeholder={positions.length === 0 ? "Create a new position..." : "Select a position..."}
             required
           />
+          {positionId === "__new" && (
+            <Input
+              label="New Position Title"
+              value={newPositionTitle}
+              onChange={setNewPositionTitle}
+              placeholder="e.g. Treasurer"
+              required
+            />
+          )}
+          {positions.length === 0 && (
+            <p className="text-xs text-slate-400">
+              This election has no positions yet — pick "+ Create new position" to add one.
+            </p>
+          )}
           <Input
             label="Candidate Name"
             value={name}
@@ -379,7 +412,14 @@ export default function CandidatesPage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={submitting || !name || !positionId}>
+            <Button
+              onClick={handleSave}
+              disabled={
+                submitting ||
+                !name ||
+                (positionId === "__new" ? !newPositionTitle.trim() : !positionId)
+              }
+            >
               {submitting ? "Saving..." : editing ? "Save Changes" : "Add Candidate"}
             </Button>
           </div>
