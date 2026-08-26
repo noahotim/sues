@@ -1,5 +1,5 @@
 import { db, functions } from "../lib/firebase";
-import { collection, doc, query, where, getDocs, onSnapshot } from "firebase/firestore";
+import { collection, query, where, getDocs, onSnapshot } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 
 export interface Vote {
@@ -37,19 +37,6 @@ export const voteService = {
       return { data: votes, error: null };
     } catch (error: any) {
       return { data: null, error: error.message };
-    }
-  },
-
-  hasUserVotedForPosition: async (electionId: string, positionId: string, userId: string): Promise<boolean> => {
-    try {
-      const userRef = doc(db, "users", userId);
-      const receiptsRef = collection(userRef, "receipts");
-      const q = query(receiptsRef, where("electionId", "==", electionId), where("positionId", "==", positionId));
-      const snapshot = await getDocs(q);
-      return !snapshot.empty;
-    } catch (error) {
-      console.error("Error checking vote receipt:", error);
-      return false;
     }
   }
 };

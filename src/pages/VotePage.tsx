@@ -76,23 +76,20 @@ export default function VotePage() {
     }
     (async () => {
       try {
-        const [posRes, candRes, eligRes] = await Promise.all([
+        const [posRes, candRes, rosterRes] = await Promise.all([
           electionService.getPositions(selectedElectionId),
           candidateService.getCandidates(selectedElectionId),
-          rosterService.isOnRoster(selectedElectionId, session.user.email),
+          rosterService.getMyRosterEntry(selectedElectionId, session.user.email),
         ]);
         const pos = posRes.data || [];
         setPositions(pos);
         setCandidates(candRes.data || []);
-        setIsEligible(eligRes.data === true);
+        const myEntry = rosterRes.data;
+        setIsEligible(!!myEntry);
 
-        // Check which positions the user has already voted for
-        const voted = new Set<string>();
-        for (const p of pos) {
-          const hasVoted = await voteService.hasUserVotedForPosition(selectedElectionId, p.id, session.user.id);
-          if (hasVoted) voted.add(p.id);
-        }
-        setVotedPositions(voted);
+        // Which positions has this voter already cast a ballot for? Read from the
+        // voter's own roster row (email-scoped), matching server-side enforcement.
+        setVotedPositions(new Set(myEntry?.votedPositions || []));
       } catch {
         setPositions([]);
         setCandidates([]);

@@ -7,6 +7,7 @@ export interface VoterRosterEntry {
   voterEmail: string;
   voterName: string;
   hasVoted: boolean;
+  votedPositions: string[];
 }
 
 export const rosterService = {
@@ -29,7 +30,7 @@ export const rosterService = {
     }
   },
 
-  addVoter: async (data: Omit<VoterRosterEntry, "id" | "hasVoted">) => {
+  addVoter: async (data: Omit<VoterRosterEntry, "id" | "hasVoted" | "votedPositions">) => {
     try {
       const voterEmail = data.voterEmail.trim().toLowerCase();
       if (!voterEmail.includes("@")) {
@@ -43,8 +44,9 @@ export const rosterService = {
         electionId: data.electionId,
         voterEmail,
         voterName: data.voterName.trim(),
-        // Preserve an existing "hasVoted" flag so re-adding never resets it.
+        // Preserve existing voting state so re-adding never resets it.
         hasVoted: existing.exists() ? Boolean(existing.data()?.hasVoted) : false,
+        votedPositions: existing.exists() ? (existing.data()?.votedPositions || []) : [],
       };
       await setDoc(ref, fullData);
       return { data: { id, ...fullData }, error: null };
@@ -79,6 +81,36 @@ export const rosterService = {
     }
   },
 
+  // A voter reads ONLY their own roster row (rules enforce this), so this uses
+  // an email-scoped compound query. Returns the row so the client can tell
+  // which positions the voter already cast a ballot for.
+  getMyRosterEntry: async (electionId: string, voterEmail: string) => {
+    try {
+      const q = query(
+        collection(db, "voter_roster"),
+        where("electionId", "==", electionId),
+        where("voterEmail", "==", voterEmail.toLowerCase()),
+      );
+      const snapshot = await getDocs(q);
+      if (snapshot.empty) return { data: null, error: null };
+      const doc = snapshot.docs[0];
+      const data = doc.data();
+      return {
+        data: {
+          id: doc.id,
+          electionId,
+          voterEmail: data.voterEmail,
+          voterName: data.voterName || "",
+          hasVoted: Boolean(data.hasVoted),
+          votedPositions: Array.isArray(data.votedPositions) ? data.votedPositions : [],
+        } as VoterRosterEntry,
+        error: null,
+      };
+    } catch (error: any) {
+      return { data: null, error: error.message };
+    }
+  },
+
   bulkUploadRoster: async (electionId: string, voters: { email: string; name: string }[]) => {
     try {
       let inserted = 0;
@@ -97,6 +129,7 @@ export const rosterService = {
           voterEmail: email,
           voterName: (voter.name || "").trim(),
           hasVoted: existing.exists() ? Boolean(existing.data()?.hasVoted) : false,
+          votedPositions: existing.exists() ? (existing.data()?.votedPositions || []) : [],
         };
         await setDoc(ref, fullData);
         inserted++;

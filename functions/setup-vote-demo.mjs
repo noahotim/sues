@@ -166,7 +166,7 @@ async function main() {
   for (const [email, name] of rosterRows) {
     const id = `voter_${EID}_${email}`;
     const ref = db.collection("voter_roster").doc(id);
-    batch.set(ref, { electionId: EID, voterEmail: email, voterName: name, hasVoted: false });
+    batch.set(ref, { electionId: EID, voterEmail: email, voterName: name, hasVoted: false, votedPositions: [] });
   }
   await retry(() => batch.commit(), "rosterBatch");
   console.log(`roster imported: ${rosterRows.length} voters`);

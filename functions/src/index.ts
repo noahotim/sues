@@ -98,11 +98,15 @@ export const castVote = onCall(async (request) => {
       throw new HttpsError("permission-denied", "You are not on the voter roster for this election.");
     }
 
-    // e. Check for duplicate vote (votes don't have voter ID, but we track if they voted in a separate collection or inside roster)
-    // Actually, in the old schema, `votes` had `voter_id` to prevent duplicate votes per position.
-    // Wait, if votes don't have `voter_id` for anonymity, we MUST track their voting status per position elsewhere, or just track overall `has_voted` in the roster.
-    // The old schema `submit_vote` checked: SELECT EXISTS(SELECT 1 FROM votes WHERE election_id = p_election_id AND position_id = p_position_id AND voter_id = auth.uid())
-    // Let's create a `voter_receipts` subcollection inside `users` to track which positions they voted for.
+    // e. Enforce once-and-only-once per voter, keyed by the roster entry
+    //    (email-scoped), so it cannot be bypassed with a second account.
+    const rosterData = rosterDoc.data() || {};
+    const votedPositions = Array.isArray(rosterData.votedPositions) ? rosterData.votedPositions : [];
+    if (votedPositions.includes(positionId)) {
+      throw new HttpsError("already-exists", "You have already voted for this position.");
+    }
+
+    // Defense in depth: also reject if a receipt already exists for this uid.
     const receiptRef = db.collection("users").doc(authData.uid).collection("receipts").doc(`${electionId}_${positionId}`);
     const receiptDoc = await transaction.get(receiptRef);
     if (receiptDoc.exists) {
@@ -125,14 +129,17 @@ export const castVote = onCall(async (request) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // Mark roster as has_voted = true
-    transaction.update(rosterDoc.ref, { hasVoted: true });
+    // Mark roster as voted (per-position + overall flag). Done atomically in the
+    // same transaction, so concurrent duplicate submissions are rejected.
+    transaction.update(rosterDoc.ref, {
+      hasVoted: true,
+      votedPositions: admin.firestore.FieldValue.arrayUnion(positionId),
+    });
 
-    // Audit log
+    // Audit log - deliberately WITHOUT the voter's identity so ballot secrecy
+    // is preserved (an admin cannot link a vote to its voter).
     const auditRef = db.collection("audit_logs").doc();
     transaction.set(auditRef, {
-      userId: authData.uid,
-      userEmail: authData.token.email,
       action: "CAST_VOTE",
       entityType: "vote",
       entityId: candidateId,

@@ -27,7 +27,7 @@ async function cleanVotes() {
   const receipts = await fdb.collectionGroup("receipts").get();
   receipts.docs.forEach((d) => batch.delete(d.ref));
   const ros = await fdb.collection("voter_roster").get();
-  ros.docs.forEach((d) => batch.update(d.ref, { hasVoted: false }));
+  ros.docs.forEach((d) => batch.update(d.ref, { hasVoted: false, votedPositions: [] }));
   await batch.commit();
   console.log(`[setup] cleared ${votes.size} votes / ${receipts.size} receipts\n`);
 }
