@@ -1,5 +1,5 @@
 import { db } from "../lib/firebase";
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, onSnapshot, serverTimestamp } from "firebase/firestore";
 
 export interface VoterRosterEntry {
   id: string;
@@ -49,6 +49,13 @@ export const rosterService = {
         votedPositions: existing.exists() ? (existing.data()?.votedPositions || []) : [],
       };
       await setDoc(ref, fullData);
+      // Also add to the system-wide register so this voter is eligible in
+      // every active election (rules let election managers maintain it).
+      await setDoc(
+        doc(db, "eligible_emails", voterEmail),
+        { email: voterEmail, role: "VOTER", addedAt: serverTimestamp() },
+        { merge: true }
+      );
       return { data: { id, ...fullData }, error: null };
     } catch (error: any) {
       return { data: null, error: error.message };
@@ -160,6 +167,12 @@ export const rosterService = {
           votedPositions: existing.exists() ? (existing.data()?.votedPositions || []) : [],
         };
         await setDoc(ref, fullData);
+        // Add to the system-wide register too (eligible in every election).
+        await setDoc(
+          doc(db, "eligible_emails", email),
+          { email, role: "VOTER", addedAt: serverTimestamp() },
+          { merge: true }
+        );
         inserted++;
       }
       return { data: { success: true, inserted, skipped }, error: null };

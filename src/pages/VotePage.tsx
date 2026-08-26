@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import { CheckSquare, CheckCircle2, Clock, AlertCircle, LogOut } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { CheckSquare, CheckCircle2, Clock, AlertCircle, LogOut, LayoutDashboard } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import {
   electionService,
@@ -193,6 +193,15 @@ export default function VotePage() {
             <span className="hidden sm:block text-xs text-slate-500 truncate max-w-[180px]">
               {profile?.fullName || session?.user.email}
             </span>
+            {permissions.includes("VIEW_DASHBOARD") && (
+              <Link
+                to="/admin/dashboard"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-900 hover:underline"
+              >
+                <LayoutDashboard size={14} />
+                Dashboard
+              </Link>
+            )}
             <Button variant="secondary" onClick={handleSignOut} className="!px-3 !py-2">
               <LogOut size={16} />
               Sign Out

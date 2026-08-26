@@ -159,10 +159,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // ---------- Allowed-voter register ----------
+    // ---------- Allowed-voter register (system-wide) ----------
+    // Read: each user sees their own entry; admins see all.
+    // Write: election managers maintain the register (e.g. via CSV import),
+    // which grants eligibility in EVERY active election.
     match /eligible_emails/{email} {
       allow read: if isSignedIn() && (isAdminRole() || request.auth.token.email == email);
-      allow write: if false;
+      allow write: if isElectionManager();
     }
   }
 }
