@@ -10,8 +10,11 @@ service cloud.firestore {
       return isSignedIn() && ('email' in request.auth.token) ? request.auth.token.email : '';
     }
     // Role is read from the caller's users/{uid} doc (no Cloud Functions needed).
+    // The exists() guard is essential: on a brand-new account the profile doc
+    // doesn't exist yet, and a bare get() would error-deny every request -
+    // including the ones needed to bootstrap the profile itself.
     function myRole() {
-      return isSignedIn()
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
         : '';
     }
