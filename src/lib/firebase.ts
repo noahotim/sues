@@ -1,5 +1,9 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, connectAuthEmulator } from "firebase/auth";
+import {
+  GoogleAuthProvider, connectAuthEmulator, initializeAuth,
+  indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence,
+  browserPopupRedirectResolver,
+} from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
@@ -19,7 +23,15 @@ const firebaseConfig = {
 };
 
 export const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+
+// Multi-layer persistence + explicit resolver. The layered persistence stack is
+// the documented remedy for storage-partitioned browsers (Brave/Safari/Chrome
+// third-party partitions) where redirect sign-in previously lost its pending
+// state ("missing initial state" error).
+export const auth = initializeAuth(app, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence],
+  popupRedirectResolver: browserPopupRedirectResolver,
+});
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const functions = getFunctions(app);

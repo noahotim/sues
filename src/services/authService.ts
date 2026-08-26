@@ -10,6 +10,19 @@ export interface UserProfile {
   roleId: string;
 }
 
+// Guards against double-redirects (a second click would overwrite the pending
+// state and break the return trip) and memoizes result processing so the
+// redirect is consumed exactly once no matter how many components ask.
+const REDIRECT_FLAG = "sues_auth_redirect_pending";
+let redirectResultPromise: Promise<{ user: FirebaseUser | null; error: string | null }> | null = null;
+
+function markRedirectPending() {
+  try { sessionStorage.setItem(REDIRECT_FLAG, "1"); } catch { /* private mode */ }
+}
+function clearRedirectPending() {
+  try { sessionStorage.removeItem(REDIRECT_FLAG); } catch { /* private mode */ }
+}
+
 export const authService = {
   signInWithGoogle: async (): Promise<{ user: FirebaseUser | null; error: string | null; redirecting?: boolean }> => {
     try {
@@ -28,6 +41,8 @@ export const authService = {
           code === "auth/cancelled-popup-request" ||
           code === "auth/operation-not-supported-in-this-environment"
         ) {
+          clearRedirectPending();          // start the trip with clean state
+          markRedirectPending();
           await signInWithRedirect(auth, provider);
           return { user: null, error: null, redirecting: true };
         }
@@ -43,20 +58,31 @@ export const authService = {
   },
 
   /**
-   * Handles the return trip from `signInWithRedirect`. Call once on app/login
-   * page load - resolves with the signed-in user (after the eligibility gate
-   * and profile bootstrap) or null when there is no pending redirect.
+   * Handles the return trip from `signInWithRedirect`. Memoized so multiple
+   * callers (login page, auth provider) share a single getRedirectResult().
    */
-  resolveRedirectSignIn: async (): Promise<{ user: FirebaseUser | null; error: string | null }> => {
-    try {
-      const result = await getRedirectResult(auth);
-      if (!result || !result.user) return { user: null, error: null };
-      const finalized = await authService.finalizeSignIn(result.user);
-      if (finalized.error) return { user: null, error: finalized.error };
-      return { user: result.user, error: null };
-    } catch (error: any) {
-      return { user: null, error: error.message };
-    }
+  resolveRedirectSignIn: (): Promise<{ user: FirebaseUser | null; error: string | null }> => {
+    if (redirectResultPromise) return redirectResultPromise;
+    redirectResultPromise = (async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        clearRedirectPending();
+        if (!result || !result.user) return { user: null, error: null };
+        const finalized = await authService.finalizeSignIn(result.user);
+        if (finalized.error) return { user: null, error: finalized.error };
+        return { user: result.user, error: null };
+      } catch (error: any) {
+        clearRedirectPending();
+        const code = String(error?.code || "");
+        // Stale or partitioned-away redirect state: silently return to a
+        // clean login screen instead of showing a confusing internal error.
+        if (code === "auth/no-auth-event" || code === "auth/missing-initial-state") {
+          return { user: null, error: null };
+        }
+        return { user: null, error: error.message };
+      }
+    })();
+    return redirectResultPromise;
   },
 
   /** Eligibility gate + profile bootstrap shared by both sign-in methods. */
