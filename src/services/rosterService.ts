@@ -111,6 +111,34 @@ export const rosterService = {
     }
   },
 
+  // The uploaded register is system-wide: check the eligible_emails doc.
+  isOnRegister: async (email: string) => {
+    try {
+      const snap = await getDoc(doc(db, "eligible_emails", email.toLowerCase()));
+      return { data: snap.exists(), error: null };
+    } catch (error: any) {
+      return { data: null, error: error.message };
+    }
+  },
+
+  // Register members get a per-election roster row on first visit so turnout
+  // tracking works; rules permit this only for genuine register entries.
+  ensureRosterRow: async (electionId: string, email: string, name = "") => {
+    try {
+      const em = email.toLowerCase();
+      await setDoc(doc(db, "voter_roster", `voter_${electionId}_${em}`), {
+        electionId,
+        voterEmail: em,
+        voterName: name,
+        hasVoted: false,
+        votedPositions: [],
+      });
+      return { error: null };
+    } catch (error: any) {
+      return { error: error.message };
+    }
+  },
+
   bulkUploadRoster: async (electionId: string, voters: { email: string; name: string }[]) => {
     try {
       let inserted = 0;
