@@ -162,6 +162,7 @@ export default function CandidatesPage() {
         await candidateService.deleteCandidatePhoto(deleteTarget.photoUrl);
       }
       await candidateService.deleteCandidate(deleteTarget.id);
+      setDeleteTarget(null);
       const candRes = await candidateService.getCandidates(selectedElectionId);
       if (candRes.data) setCandidates(candRes.data);
     } catch (err) {
