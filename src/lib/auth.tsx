@@ -36,9 +36,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadUserData(firebaseUser: FirebaseUser) {
     try {
-      // Get the ID token result to extract the custom claim
-      const idTokenResult = await firebaseUser.getIdTokenResult(true);
-      const userRoleStr = (idTokenResult.claims.role as string) || "VOTER";
+      // Roles live in the Firestore profile (no Cloud Functions to mint claims
+      // anymore), so read it first. Custom claims remain only as a fallback for
+      // older deployments.
+      const { data: userProfile } = await authService.getUserProfile(firebaseUser.uid);
+      const idTokenResult = await firebaseUser.getIdTokenResult().catch(() => null);
+      const claimRole = (idTokenResult?.claims?.role as string) || undefined;
+      const userRoleStr = userProfile?.roleId || claimRole || "VOTER";
 
       const userRole = ROLES.find((r) => r.id === userRoleStr) ?? ROLES.find(r => r.id === "VOTER")!;
       setRole(userRole);
@@ -46,12 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userPermissions = ROLE_PERMISSIONS[userRoleStr] || [];
       setPermissions(userPermissions);
 
-      // Load additional profile data from Firestore
-      const { data: userProfile } = await authService.getUserProfile(firebaseUser.uid);
       if (userProfile) {
         setProfile(userProfile);
       } else {
-        // Fallback if document is not created yet
+        // Fallback if the document is not created yet
         setProfile({
           id: firebaseUser.uid,
           email: firebaseUser.email || "",
@@ -76,22 +78,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    const unsubscribe = authService.onAuthStateChanged((firebaseUser) => {
-      (async () => {
-        if (firebaseUser) {
-          setSession({ user: { id: firebaseUser.uid, email: firebaseUser.email ?? "" } });
-          await loadUserData(firebaseUser);
-        } else {
-          setSession(null);
-          setProfile(null);
-          setRole(null);
-          setPermissions([]);
-        }
-        setLoading(false);
-      })();
-    });
+    let active = true;
+    (async () => {
+      // Complete any in-flight redirect sign-in FIRST - before subscribing to
+      // auth state. This is the canonical ordering for redirect flows and
+      // prevents the "missing initial state" / uncompleted-sign-in behaviour.
+      await authService.resolveRedirectSignIn();
 
-    return () => unsubscribe();
+      const unsubscribe = authService.onAuthStateChanged((firebaseUser) => {
+        (async () => {
+          if (!active) return;
+          if (firebaseUser) {
+            setSession({ user: { id: firebaseUser.uid, email: firebaseUser.email ?? "" } });
+            await loadUserData(firebaseUser);
+          } else {
+            setSession(null);
+            setProfile(null);
+            setRole(null);
+            setPermissions([]);
+          }
+          setLoading(false);
+        })();
+      });
+      return () => {
+        active = false;
+        unsubscribe();
+      };
+    })();
   }, []);
 
   return (
