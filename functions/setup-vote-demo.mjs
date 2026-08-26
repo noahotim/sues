@@ -81,7 +81,7 @@ async function upsertUser(email, role, name, addToRegister) {
 async function main() {
   // 0. Wipe stale demo data so a reseed is deterministic and consistent
   //    (e.g. an orphan election with no positions/candidates must not linger).
-  for (const col of ["elections", "positions", "candidates", "voter_roster", "votes", "audit_logs"]) {
+  for (const col of ["elections", "positions", "candidates", "voter_roster", "votes", "vote_receipts", "audit_logs"]) {
     const snap = await db.collection(col).get();
     const b = db.batch();
     snap.docs.forEach((d) => b.delete(d.ref));

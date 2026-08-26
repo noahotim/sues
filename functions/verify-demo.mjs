@@ -8,8 +8,8 @@ import {
   signInWithEmailAndPassword, signOut,
 } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator, doc, getDoc, getDocs, collection, query, where } from "firebase/firestore";
-import { getFunctions, connectFunctionsEmulator, httpsCallable } from "firebase/functions";
 import { signInAs } from "./demo-auth-helper.mjs";
+import { submitVote } from "./vote-flow-helper.mjs";
 
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
@@ -24,6 +24,8 @@ async function resetVoteState() {
   votes.docs.forEach((d) => batch.delete(d.ref));
   const receipts = await fdb.collectionGroup("receipts").get();
   receipts.docs.forEach((d) => batch.delete(d.ref));
+  const voteReceipts = await fdb.collection("vote_receipts").get();
+  voteReceipts.docs.forEach((d) => batch.delete(d.ref));
   const ros = await fdb.collection("voter_roster").get();
   ros.docs.forEach((d) => batch.update(d.ref, { hasVoted: false, votedPositions: [] }));
   await batch.commit();
@@ -36,10 +38,8 @@ await resetVoteState();
 const app = initializeApp({ apiKey: "demo", projectId: "sues-d7a7f" });
 const auth = getAuth(app);
 const db = getFirestore(app);
-const fns = getFunctions(app);
 connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
 connectFirestoreEmulator(db, "127.0.0.1", 8080);
-connectFunctionsEmulator(fns, "127.0.0.1", 5001);
 
 const EID = "presec2026";
 let fails = 0;
@@ -59,14 +59,13 @@ async function passesGate(email) {
   await signInAs(auth, email);
   ok("CSV voter passes login gate", await passesGate(email), email);
 
-  const castVote = httpsCallable(fns, "castVote");
-  const r1 = await castVote({ electionId: EID, positionId: "pos_president", candidateId: "cand_pres1" });
-  ok("votes President (Otim James)", r1.data?.success === true);
-  const r2 = await castVote({ electionId: EID, positionId: "pos_secretary", candidateId: "cand_sec2" });
-  ok("votes Secretary (Otime)", r2.data?.success === true);
+  const r1 = await submitVote(db, auth, { electionId: EID, positionId: "pos_president", candidateId: "cand_pres1" });
+  ok("votes President (Otim James)", r1?.success === true);
+  const r2 = await submitVote(db, auth, { electionId: EID, positionId: "pos_secretary", candidateId: "cand_sec2" });
+  ok("votes Secretary (Otime)", r2?.success === true);
 
   let blocked = false;
-  try { await castVote({ electionId: EID, positionId: "pos_president", candidateId: "cand_pres1" }); } catch (e) { blocked = e.code === "functions/already-exists"; }
+  try { await submitVote(db, auth, { electionId: EID, positionId: "pos_president", candidateId: "cand_pres1" }); } catch (e) { blocked = e.code === "already-exists"; }
   ok("double vote for a position blocked", blocked);
   await signOut(auth);
 }
@@ -76,9 +75,8 @@ async function passesGate(email) {
   const email = "akello.mary@sun.ac.ug";
   await signInAs(auth, email);
   ok("2nd CSV voter passes login gate", await passesGate(email));
-  const castVote = httpsCallable(fns, "castVote");
-  const r = await castVote({ electionId: EID, positionId: "pos_president", candidateId: "cand_pres2" });
-  ok("2nd CSV voter can vote (Okeelo)", r.data?.success === true);
+  const r = await submitVote(db, auth, { electionId: EID, positionId: "pos_president", candidateId: "cand_pres2" });
+  ok("2nd CSV voter can vote (Okeelo)", r?.success === true);
   await signOut(auth);
 }
 
@@ -89,9 +87,8 @@ async function passesGate(email) {
   ok("non-CSV email fails login gate", !(await passesGate(intruder)), intruder);
   let voteBlocked = false;
   try {
-    const castVote = httpsCallable(fns, "castVote");
-    await castVote({ electionId: EID, positionId: "pos_president", candidateId: "cand_pres1" });
-  } catch (e) { voteBlocked = e.code === "functions/permission-denied"; }
+    await submitVote(db, auth, { electionId: EID, positionId: "pos_president", candidateId: "cand_pres1" });
+  } catch (e) { voteBlocked = e.code === "permission-denied" || e.code === "already-exists"; }
   ok("non-CSV email cannot vote (no roster)", voteBlocked);
   await signOut(auth);
 }

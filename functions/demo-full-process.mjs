@@ -8,8 +8,8 @@ import {
   signInWithEmailAndPassword, signOut,
 } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator, collection, query, where, getDocs } from "firebase/firestore";
-import { getFunctions, connectFunctionsEmulator, httpsCallable } from "firebase/functions";
 import { signInAs } from "./demo-auth-helper.mjs";
+import { submitVote } from "./vote-flow-helper.mjs";
 
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
@@ -26,10 +26,12 @@ async function cleanVotes() {
   votes.docs.forEach((d) => batch.delete(d.ref));
   const receipts = await fdb.collectionGroup("receipts").get();
   receipts.docs.forEach((d) => batch.delete(d.ref));
+  const voteReceipts = await fdb.collection("vote_receipts").get();
+  voteReceipts.docs.forEach((d) => batch.delete(d.ref));
   const ros = await fdb.collection("voter_roster").get();
   ros.docs.forEach((d) => batch.update(d.ref, { hasVoted: false, votedPositions: [] }));
   await batch.commit();
-  console.log(`[setup] cleared ${votes.size} votes / ${receipts.size} receipts\n`);
+  console.log(`[setup] cleared ${votes.size} votes / ${voteReceipts.size} ballot claims\n`);
 }
 await cleanVotes();
 
@@ -44,17 +46,16 @@ const BALLOTS = [
 
 const app = initializeApp({ apiKey: "demo", projectId: "sues-d7a7f" });
 const auth = getAuth(app);
-const fns = getFunctions(app);
+const db = getFirestore(app);
 connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
-connectFunctionsEmulator(fns, "127.0.0.1", 5001);
-const castVote = httpsCallable(fns, "castVote");
+connectFirestoreEmulator(db, "127.0.0.1", 8080);
 
 console.log("=== STEP 1: ELIGIBLE VOTERS CAST THEIR VOTES ===");
 for (const b of BALLOTS) {
   await signInAs(auth, b.email);
-  const r1 = await castVote({ electionId: EID, positionId: "pos_president", candidateId: b.pres });
-  const r2 = await castVote({ electionId: EID, positionId: "pos_secretary", candidateId: b.sec });
-  const ok = r1.data?.success && r2.data?.success;
+  const r1 = await submitVote(db, auth, { electionId: EID, positionId: "pos_president", candidateId: b.pres });
+  const r2 = await submitVote(db, auth, { electionId: EID, positionId: "pos_secretary", candidateId: b.sec });
+  const ok = r1?.success && r2?.success;
   console.log(`  ${b.email.padEnd(26)} -> President:${b.pres}  Secretary:${b.sec}  [${ok ? "OK" : "FAIL"}]`);
   await signOut(auth);
 }

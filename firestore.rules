@@ -1,112 +1,164 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper Functions
-    function isAuthenticated() {
+
+    // ---------- Helpers ----------
+    function isSignedIn() {
       return request.auth != null;
     }
-    
-    function hasRole(role) {
-      return isAuthenticated() && 'role' in request.auth.token && request.auth.token.role == role;
+    function userEmail() {
+      return isSignedIn() && ('email' in request.auth.token) ? request.auth.token.email : '';
     }
-    
+    // Role is read from the caller's users/{uid} doc (no Cloud Functions needed).
+    function myRole() {
+      return isSignedIn()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : '';
+    }
+    function isAdminRole() {
+      return myRole() == 'ROLE_CHAIRPERSON' || myRole() == 'ROLE_SECRETARY' || myRole() == 'ROLE_ASSISTANT';
+    }
     function isChairperson() {
-      return hasRole('ROLE_CHAIRPERSON');
+      return myRole() == 'ROLE_CHAIRPERSON';
     }
-    
-    function isSecretary() {
-      return hasRole('ROLE_SECRETARY');
-    }
-    
-    function isAssistant() {
-      return hasRole('ROLE_ASSISTANT');
-    }
-    
-    function isVoter() {
-      return hasRole('VOTER');
-    }
-    
-    function isAdmin() {
-      return isChairperson() || isSecretary() || isAssistant();
-    }
-    
     function isElectionManager() {
-      return isChairperson() || isSecretary();
+      return myRole() == 'ROLE_CHAIRPERSON' || myRole() == 'ROLE_SECRETARY';
+    }
+    function electionStatus(electionId) {
+      return get(/databases/$(database)/documents/elections/$(electionId)).data.status;
+    }
+    function electionOpen(electionId) {
+      let e = get(/databases/$(database)/documents/elections/$(electionId)).data;
+      return e.status == 'active'
+        && (!('startTime' in e) || e.startTime == null || request.time >= e.startTime)
+        && (!('endTime' in e) || e.endTime == null || request.time <= e.endTime);
+    }
+    function rosterRowId(electionId, email) {
+      return 'voter_' + electionId + '_' + email;
+    }
+    function isOnRosterNow(electionId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/voter_roster/$(rosterRowId(electionId, userEmail())));
+    }
+    function receiptId(electionId, positionId) {
+      return userEmail() + '__' + electionId + '__' + positionId;
     }
 
-    // Profiles (Users)
+    // ---------- Users / profiles ----------
     match /users/{userId} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      // Updates to role or sensitive info happen via Cloud Functions
-      allow update: if isAuthenticated() && request.auth.uid == userId 
-                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName']);
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdminRole());
+      // First-time profile creation: role must mirror the signed-up user's
+      // register entry (chairperson/staff seeded ahead of time), else VOTER.
+      allow create: if isSignedIn() && request.auth.uid == userId
+        && request.resource.data.email == userEmail()
+        && request.resource.data.role ==
+            (exists(/databases/$(database)/documents/eligible_emails/$(userEmail()))
+              ? get(/databases/$(database)/documents/eligible_emails/$(userEmail())).data.get('role', 'VOTER')
+              : 'VOTER');
+      allow update: if isSignedIn() && (
+        // profile name self-service
+        (request.auth.uid == userId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName']))
+        ||
+        // chairperson assigns roles
+        (myRole() == 'ROLE_CHAIRPERSON'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'updatedAt']))
+      );
+      allow delete: if false;
 
-      // Vote receipts: a voter reads their own; admins read all. Written only by castVote.
       match /receipts/{receiptId} {
-        allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-        allow write: if false;
+        allow read: if isSignedIn() && (request.auth.uid == userId || isAdminRole());
+        allow write: if false; // legacy; voting no longer writes here
       }
     }
 
-    // Elections
+    // ---------- Elections ----------
     match /elections/{electionId} {
-      // Any signed-in user may list elections. The client filters by status
-      // (e.g. only active elections are shown to voters), and the positions/
-      // candidates rules below still gate readable content by election status.
-      // NOTE: a per-document status filter here would reject the unconstrained
-      // list query (orderBy) used by the app, so reads are granted to any
-      // authenticated user instead.
-      allow read: if isAuthenticated();
+      allow read: if isSignedIn();
       allow write: if isElectionManager();
     }
 
-    // Positions
+    // ---------- Positions ----------
     match /positions/{positionId} {
-      // Voters can read positions if the parent election is visible to them
-      allow read: if isAuthenticated() && 
-                  (isAdmin() || 
-                    get(/databases/$(database)/documents/elections/$(resource.data.electionId)).data.status in ['active', 'closed', 'published']);
+      allow read: if isSignedIn() &&
+        (isAdminRole() ||
+         electionStatus(resource.data.electionId) in ['active', 'closed', 'published']);
       allow write: if isElectionManager();
     }
 
-    // Candidates
+    // ---------- Candidates ----------
     match /candidates/{candidateId} {
-      allow read: if isAuthenticated() && 
-                  (isAdmin() || 
-                    get(/databases/$(database)/documents/elections/$(resource.data.electionId)).data.status in ['active', 'closed', 'published']);
+      allow read: if isSignedIn() &&
+        (isAdminRole() ||
+         electionStatus(resource.data.electionId) in ['active', 'closed', 'published']);
       allow write: if isElectionManager();
     }
 
-    // Voter Roster
+    // ---------- Voter roster ----------
     match /voter_roster/{rosterId} {
-      // Voter can read their own entry. Admins can read all.
-      allow read: if isAuthenticated() && (isAdmin() || resource.data.voterEmail == request.auth.token.email);
-      // Only Chairperson & Secretary can manage roster. Assistant can only read (for verification).
-      allow write: if isElectionManager();
+      allow read: if isSignedIn() && (isAdminRole() || resource.data.voterEmail == userEmail());
+      // Managers maintain the register. Voters may ONLY flip their own turnout
+      // flags (cosmetic), and only after a valid vote receipt exists.
+      allow update: if isElectionManager()
+        || (isSignedIn()
+            && resource.data.voterEmail == userEmail()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hasVoted', 'votedPositions'])
+            && request.resource.data.hasVoted == true
+            && request.resource.data.votedPositions.hasAll(resource.data.votedPositions)
+            && request.resource.data.votedPositions.size() > resource.data.votedPositions.size());
+      allow create, delete: if isElectionManager();
     }
 
-    // Votes
+    // ---------- Vote receipts (the once-and-only-once lock) ----------
+    // Deterministic id: "<email>__<electionId>__<positionId>".
+    // Create is allowed exactly once; updates/deletes are impossible, so a
+    // second ballot for the same position can never be recorded - even with
+    // concurrent submissions racing each other.
+    match /vote_receipts/{receiptId} {
+      allow read: if isSignedIn() && resource.data.voterEmail == userEmail();
+      allow create: if isSignedIn()
+        && request.resource.data.voterEmail == userEmail()
+        && request.resource.data.nonce is string
+        && request.resource.data.nonce.size() >= 20
+        && request.resource.data.keys().hasOnly(['voterEmail', 'electionId', 'positionId', 'nonce', 'createdAt'])
+        && electionOpen(request.resource.data.electionId)
+        && isOnRosterNow(request.resource.data.electionId)
+        && exists(/databases/$(database)/documents/positions/$(request.resource.data.positionId))
+        && get(/databases/$(database)/documents/positions/$(request.resource.data.positionId)).data.electionId
+             == request.resource.data.electionId;
+      allow update, delete: if false;
+    }
+
+    // ---------- Votes (anonymous tally records) ----------
+    // The vote document id MUST equal the unguessable nonce from the caller's
+    // receipt. Rules verify ownership + candidate validity; because the id is
+    // unique, a replayed nonce cannot create a second record.
     match /votes/{voteId} {
-      // Only admins can read all votes for tallying. Votes do NOT contain voter_id to ensure anonymity.
-      allow read: if isAdmin();
-      // NO ONE can write votes directly from the client. Must use `castVote` Cloud Function.
-      allow write: if false; 
+      allow read: if isAdminRole();
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['electionId', 'positionId', 'candidateId', 'createdAt'])
+        && voteId.size() >= 20
+        && electionOpen(request.resource.data.electionId)
+        && exists(/databases/$(database)/documents/vote_receipts/$(receiptId(
+               request.resource.data.electionId, request.resource.data.positionId)))
+        && request.resource.data.candidateId is string
+        && exists(/databases/$(database)/documents/candidates/$(request.resource.data.candidateId))
+        && get(/databases/$(database)/documents/candidates/$(request.resource.data.candidateId)).data.electionId
+             == request.resource.data.electionId
+        && get(/databases/$(database)/documents/candidates/$(request.resource.data.candidateId)).data.positionId
+             == request.resource.data.positionId;
+      allow update, delete: if false;
     }
 
-    // Audit Logs
+    // ---------- Audit logs ----------
     match /audit_logs/{logId} {
-      allow read: if isChairperson(); // Only highest admin sees audit logs
-      allow write: if false; // Written only by Cloud Functions
+      allow read: if isChairperson();
+      allow write: if false;
     }
 
-    // Allowed-voter register (eligible_emails)
-    // Each user may read only their own entry (used by the login eligibility gate);
-    // admins may read all. Writes happen only via server/seed (never from the client).
+    // ---------- Allowed-voter register ----------
     match /eligible_emails/{email} {
-      // A user may read only their own register entry (used by the login gate);
-      // admins may read all. Writes happen only via server/seed.
-      allow read: if isAuthenticated() && (isAdmin() || request.auth.token.email == email);
+      allow read: if isSignedIn() && (isAdminRole() || request.auth.token.email == email);
       allow write: if false;
     }
   }

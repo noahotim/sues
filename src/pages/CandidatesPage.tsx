@@ -99,9 +99,9 @@ export default function CandidatesPage() {
         const up = await candidateService.uploadCandidatePhoto(photoFile);
         if (up.error) throw new Error(up.error);
         finalPhotoUrl = up.data?.path || "";
-        // Remove the previous photo if we replaced it
+        // Remove the previous photo if we replaced it (no-op for data URLs)
         if (editing?.photoUrl && editing.photoUrl !== finalPhotoUrl) {
-          await candidateService.deleteCandidatePhoto(editing.photoUrl);
+          await candidateService.deleteCandidatePhoto();
         }
       }
       if (editing) {
@@ -179,7 +179,7 @@ export default function CandidatesPage() {
     if (!deleteTarget) return;
     try {
       if (deleteTarget.photoUrl) {
-        await candidateService.deleteCandidatePhoto(deleteTarget.photoUrl);
+        await candidateService.deleteCandidatePhoto();
       }
       await candidateService.deleteCandidate(deleteTarget.id);
       setDeleteTarget(null);

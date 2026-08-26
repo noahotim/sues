@@ -1,5 +1,5 @@
 import { auth, db, functions } from "../lib/firebase";
-import { collection, doc, getDocs, getDoc, query, where } from "firebase/firestore";
+import { collection, doc, getDocs, getDoc, setDoc, updateDoc, serverTimestamp, query, where } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 
@@ -37,6 +37,25 @@ export const authService = {
           user: null,
           error: "Your email is not authorized to access this voting system. Contact the election administrator.",
         };
+      }
+
+      // Ensure a profile doc exists. Roles come from the register entry (no
+      // Cloud Functions required): seeded staff emails get their admin role,
+      // everyone else defaults to VOTER.
+      const profileRef = doc(db, "users", result.user.uid);
+      const profileSnap = await getDoc(profileRef).catch(() => null);
+      if (profileSnap && !profileSnap.exists()) {
+        let role = "VOTER";
+        if (onRegister.exists() && typeof onRegister.data()?.role === "string") {
+          role = onRegister.data()!.role as string;
+        }
+        await setDoc(profileRef, {
+          email,
+          fullName: result.user.displayName || "Unknown User",
+          role,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
       }
 
       return { user: result.user, error: null };
@@ -99,8 +118,17 @@ export const authService = {
 
   updateUserRole: async (targetUid: string, targetRole: string) => {
     try {
-      const setUserRoleFn = httpsCallable(functions, "setUserRole");
-      await setUserRoleFn({ targetUid, targetRole });
+      // Preferred path: Cloud Function (when deployed). Fallback: direct doc
+      // update, which security rules permit for the Chairperson.
+      try {
+        const setUserRoleFn = httpsCallable(functions, "setUserRole");
+        await setUserRoleFn({ targetUid, targetRole });
+      } catch {
+        await updateDoc(doc(db, "users", targetUid), {
+          role: targetRole,
+          updatedAt: serverTimestamp(),
+        });
+      }
       return { error: null };
     } catch (error: any) {
       return { error: error.message };
