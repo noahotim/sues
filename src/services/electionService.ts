@@ -1,5 +1,5 @@
 import { db } from "../lib/firebase";
-import { collection, doc, getDocs, setDoc, updateDoc, deleteDoc, query, orderBy, where, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDocs, setDoc, updateDoc, deleteDoc, query, orderBy, where, onSnapshot, Timestamp } from "firebase/firestore";
 
 export interface Election {
   id: string;
@@ -20,11 +20,36 @@ export interface Position {
   displayOrder: number;
 }
 
+/** Times are stored as Firestore Timestamps (rules compare them to request.time). */
+function toTs(v: string | null | undefined): Timestamp | null {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : Timestamp.fromDate(d);
+}
+
+function tsToIso(v: unknown): string | null {
+  if (v instanceof Timestamp) return v.toDate().toISOString();
+  if (typeof v === "string") return v;
+  return null;
+}
+
+function normalizeElection(id: string, data: Record<string, any>): Election {
+  return {
+    id,
+    title: data.title ?? "",
+    description: data.description ?? "",
+    status: data.status ?? "draft",
+    startTime: tsToIso(data.startTime),
+    endTime: tsToIso(data.endTime),
+    resultsPublished: Boolean(data.resultsPublished),
+  };
+}
+
 export const electionService = {
   subscribeToElections: (callback: (data: Election[]) => void) => {
     const q = query(collection(db, "elections"), orderBy("title"));
     return onSnapshot(q, (snapshot) => {
-      const elections = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Election));
+      const elections = snapshot.docs.map(doc => normalizeElection(doc.id, doc.data()));
       callback(elections);
     });
   },
@@ -33,7 +58,7 @@ export const electionService = {
     try {
       const q = query(collection(db, "elections"), orderBy("title"));
       const snapshot = await getDocs(q);
-      const elections = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Election));
+      const elections = snapshot.docs.map(doc => normalizeElection(doc.id, doc.data()));
       return { data: elections, error: null };
     } catch (error: any) {
       return { data: null, error: error.message };
@@ -56,7 +81,7 @@ export const electionService = {
   createElection: async (data: Omit<Election, "id">) => {
     try {
       const newDocRef = doc(collection(db, "elections"));
-      await setDoc(newDocRef, data);
+      await setDoc(newDocRef, { ...data, startTime: toTs(data.startTime), endTime: toTs(data.endTime) });
       return { data: { id: newDocRef.id, ...data }, error: null };
     } catch (error: any) {
       return { data: null, error: error.message };
@@ -65,7 +90,11 @@ export const electionService = {
 
   updateElection: async (id: string, data: Partial<Election>) => {
     try {
-      await updateDoc(doc(db, "elections", id), data);
+      await updateDoc(doc(db, "elections", id), {
+        ...data,
+        startTime: toTs(data.startTime),
+        endTime: toTs(data.endTime),
+      });
       return { error: null };
     } catch (error: any) {
       return { error: error.message };

@@ -94,17 +94,26 @@ export const authService = {
         return { ok: false, error: "The sign-in provider did not return an email address." };
       }
 
-      // Eligibility gate: only emails on the allowed register (eligible_emails)
-      // or on a voter roster may use the system. Everyone else is signed back out.
+      // Eligibility gate: staff (register entry with an admin role) OR voters
+      // present on an actual election roster may use the system. A plain VOTER
+      // register entry with no roster row anywhere is NOT sufficient - it only
+      // grants system-wide eligibility once they've been uploaded to a roster.
       const onRegister = await getDoc(doc(db, "eligible_emails", email));
+      const regRole =
+        onRegister.exists() && typeof onRegister.data()?.role === "string"
+          ? (onRegister.data()!.role as string)
+          : "";
+      const isStaff = regRole !== "" && regRole !== "VOTER";
+
       let onRoster = false;
-      if (!onRegister.exists()) {
+      if (!isStaff) {
         const ros = await getDocs(
           query(collection(db, "voter_roster"), where("voterEmail", "==", email.toLowerCase()))
         );
         onRoster = !ros.empty;
       }
-      if (!onRegister.exists() && !onRoster) {
+
+      if (!isStaff && !onRoster) {
         await signOut(auth);
         return {
           ok: false,

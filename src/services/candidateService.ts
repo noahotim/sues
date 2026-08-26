@@ -1,5 +1,5 @@
 import { db } from "../lib/firebase";
-import { collection, doc, getDocs, setDoc, updateDoc, deleteDoc, query, where } from "firebase/firestore";
+import { collection, doc, getDocs, setDoc, updateDoc, deleteDoc, query, where, onSnapshot } from "firebase/firestore";
 
 export interface Candidate {
   id: string;
@@ -54,6 +54,16 @@ export const candidateService = {
     } catch (error: any) {
       return { data: null, error: error.message };
     }
+  },
+
+  subscribeToCandidates: (electionId: string, callback: (data: Candidate[]) => void) => {
+    const q = query(collection(db, "candidates"), where("electionId", "==", electionId));
+    return onSnapshot(q, (snapshot) => {
+      const candidates = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Candidate))
+        .sort((a, b) => a.displayOrder - b.displayOrder);
+      callback(candidates);
+    });
   },
 
   createCandidate: async (data: Omit<Candidate, "id">) => {

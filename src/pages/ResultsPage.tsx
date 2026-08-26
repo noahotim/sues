@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { BarChart3, Trophy } from "lucide-react";
+import { jsPDF } from "jspdf";
+import { BarChart3, Trophy, FileDown } from "lucide-react";
 import {
   electionService,
   candidateService,
@@ -12,6 +13,7 @@ import {
 } from "../services";
 import {
   Card,
+  Button,
   Badge,
   Select,
   LoadingState,
@@ -120,6 +122,111 @@ export default function ResultsPage() {
 
   const selectedElection = elections.find((e) => e.id === selectedElectionId);
 
+  async function downloadPdf() {
+    if (!selectedElection) return;
+    const doc = new jsPDF();
+    const margin = 18;
+    const width = doc.internal.pageSize.getWidth();
+    let y = margin;
+
+    // Logo
+    try {
+      const img = await fetch("/sues-logo.jpg").then((r) => r.blob());
+      const dataUrl: string = await new Promise((res) => {
+        const reader = new FileReader();
+        reader.onload = () => res(String(reader.result));
+        reader.readAsDataURL(img);
+      });
+      doc.addImage(dataUrl, "JPEG", margin, y - 2, 16, 16);
+      doc.text("SUES", margin + 22, y + 4);
+      doc.setFontSize(8);
+      doc.setTextColor(100);
+      doc.text("Soroti University Engineering Society", margin + 22, y + 10);
+      doc.setTextColor(0);
+    } catch {
+      doc.text("SUES Elections", margin, y + 6);
+    }
+    doc.setFontSize(18);
+    doc.text("Official Election Results", margin, y + 26);
+    y += 34;
+
+    doc.setFontSize(12);
+    doc.text("Election: " + selectedElection.title, margin, y);
+    y += 7;
+    doc.setFontSize(9);
+    doc.setTextColor(90);
+    doc.text(
+      "Generated: " + new Date().toLocaleString() + "   |   Status: " + selectedElection.status.toUpperCase(),
+      margin,
+      y
+    );
+    doc.setTextColor(0);
+    y += 12;
+
+    for (const { position, results, totalVotes } of positionResults) {
+      // page-break safety
+      if (y > doc.internal.pageSize.getHeight() - 60) {
+        doc.addPage();
+        y = margin;
+      }
+      doc.setFontSize(13);
+      doc.setTextColor(23, 37, 84);
+      doc.text(position.title, margin, y);
+      doc.setTextColor(0);
+      y += 7;
+
+      if (results.length === 0) {
+        doc.setFontSize(9);
+        doc.text("No candidates for this position.", margin, y);
+        y += 6;
+        continue;
+      }
+
+      doc.setFontSize(10);
+      for (const r of results) {
+        const pct = totalVotes > 0 ? Math.round((r.votes / totalVotes) * 100) : 0;
+        doc.setFontSize(10);
+        doc.text(`${r.candidate.name}`, margin, y);
+        doc.text(`${r.votes} vote(s) - ${pct}%`, width - margin, y, { align: "right" });
+        // bar
+        const barMax = width - margin * 2;
+        const barLen = Math.max(0, Math.min(barMax, (barMax * r.votes) / (totalVotes || 1)));
+        doc.setFillColor(15, 23, 42);
+        doc.rect(margin, y + 2.5, barLen, 2, "F");
+        doc.setFillColor(22, 163, 74);
+        doc.rect(margin + barLen, y + 2.5, Math.max(0, barMax - barLen), 2, "F");
+        y += 9;
+      }
+      doc.text(`Position total: ${totalVotes} vote(s)`, margin, y + 2);
+      y += 12;
+    }
+
+    // Turnout summary
+    doc.setDrawColor(15, 23, 42);
+    doc.line(margin, y, width - margin, y);
+    y += 8;
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text("Turnout", margin, y);
+    doc.setFont("helvetica", "normal");
+    y += 6;
+    doc.setFontSize(10);
+    doc.text(`Eligible voters: ${roster.length}`, margin, y);
+    doc.text(`Voters who voted: ${votersVoted}`, margin, y + 6);
+    doc.text(`Turnout: ${turnoutPercentage}%`, margin, y + 12);
+    y += 20;
+
+    doc.setFontSize(8);
+    doc.setTextColor(120);
+    doc.text(
+      "Votes are recorded anonymously - no ballot can be traced back to a voter.",
+      margin,
+      y
+    );
+
+    doc.save(`SUES-Results-${selectedElection.title.replace(/[^a-z0-9]+/gi, "-")}.pdf`);
+  }
+
   function statusBadge(status: string): React.ReactNode {
     const map: Record<string, { variant: "neutral" | "success" | "warning" | "primary"; label: string }> = {
       draft: { variant: "neutral", label: "Draft" },
@@ -134,13 +241,26 @@ export default function ResultsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-start justify-between flex-wrap gap-3 mb-8 border-b-2 border-primary-900 pb-4">
-        <div>
-          <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-1">SUES Administration</h2>
-          <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">Election Results</h1>
-          <p className="text-sm text-slate-600 mt-2">
-            Results are calculated from actual cast votes and update in real time.
-          </p>
+        <div className="flex items-center gap-4">
+          <img
+            src="/sues-logo.jpg"
+            alt="SUES logo"
+            className="w-12 h-12 object-contain rounded-sm hidden sm:block"
+          />
+          <div>
+            <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-1">SUES Administration</h2>
+            <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">Election Results</h1>
+            <p className="text-sm text-slate-600 mt-2">
+              Results are calculated from actual cast votes and update in real time.
+            </p>
+          </div>
         </div>
+        {selectedElection && positionResults.length > 0 && (
+          <Button onClick={downloadPdf}>
+            <FileDown size={18} />
+            Download PDF
+          </Button>
+        )}
       </div>
 
       {elections.length > 0 && (

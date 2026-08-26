@@ -32,16 +32,27 @@ service cloud.firestore {
     }
     function electionOpen(electionId) {
       let e = get(/databases/$(database)/documents/elections/$(electionId)).data;
+      // The app stores times as Firestore Timestamps. Null/missing = open.
+      let start = 'startTime' in e ? e.startTime : null;
+      let end = 'endTime' in e ? e.endTime : null;
       return e.status == 'active'
-        && (!('startTime' in e) || e.startTime == null || request.time >= e.startTime)
-        && (!('endTime' in e) || e.endTime == null || request.time <= e.endTime);
+        && (start == null || request.time >= start)
+        && (end == null || request.time <= end);
     }
     function rosterRowId(electionId, email) {
       return 'voter_' + electionId + '_' + email;
     }
+    // The uploaded register (eligible_emails) is SYSTEM-WIDE: a registered
+    // member may participate in every active election, even without an explicit
+    // per-election roster row.
+    function isRegisterMember() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/eligible_emails/$(userEmail()));
+    }
     function isOnRosterNow(electionId) {
       return isSignedIn() &&
-        exists(/databases/$(database)/documents/voter_roster/$(rosterRowId(electionId, userEmail())));
+        (exists(/databases/$(database)/documents/voter_roster/$(rosterRowId(electionId, userEmail())))
+         || isRegisterMember());
     }
     function receiptId(electionId, positionId) {
       return userEmail() + '__' + electionId + '__' + positionId;

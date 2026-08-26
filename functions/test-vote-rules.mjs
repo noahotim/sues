@@ -90,6 +90,48 @@ async function ensureProfile(roleOverride) {
 
   await signOut(auth);
 
+  // --- register-wide + string-typed election times (app stores ISO strings) --
+  await signInWithEmailAndPassword(auth, "secretary.sues@sun.ac.ug", "sues2026");
+  await ensureProfile();
+  const EID3 = "elec_string_" + Date.now();
+  await setDoc(doc(db, "elections", EID3), {
+    title: "String-Time Test", description: "", status: "active",
+    startTime: new Date(Date.now() - 60000).toISOString(),
+    endTime: new Date(Date.now() + 3600000).toISOString(),
+    resultsPublished: false,
+  });
+  await setDoc(doc(db, "positions", "pos_st"), { electionId: EID3, title: "Treasurer", description: "", maxVotes: 1, displayOrder: 1 });
+  await setDoc(doc(db, "candidates", "cand_st1"), { electionId: EID3, positionId: "pos_st", name: "ST One", bio: "", photoUrl: "", displayOrder: 0 });
+  await signOut(auth);
+
+  // grace.atim is on the REGISTER (eligible_emails) but has NO roster row here
+  await signInWithEmailAndPassword(auth, "grace.atim@sun.ac.ug", "sues2026");
+  await ensureProfile();
+  r = await submitVote(db, auth, { electionId: EID3, positionId: "pos_st", candidateId: "cand_st1" });
+  ok("register member votes in new election with ISO-string times", r?.success === true);
+  await signOut(auth);
+
+  // future start time must be blocked
+  const EID4 = "elec_future_" + Date.now();
+  await signInWithEmailAndPassword(auth, "secretary.sues@sun.ac.ug", "sues2026");
+  await ensureProfile();
+  await setDoc(doc(db, "elections", EID4), {
+    title: "Future Start", description: "", status: "active",
+    startTime: new Date(Date.now() + 3600000).toISOString(),
+    endTime: new Date(Date.now() + 7200000).toISOString(),
+    resultsPublished: false,
+  });
+  await setDoc(doc(db, "positions", "pos_fs"), { electionId: EID4, title: "Treasurer", description: "", maxVotes: 1, displayOrder: 1 });
+  await setDoc(doc(db, "candidates", "cand_fs1"), { electionId: EID4, positionId: "pos_fs", name: "FS One", bio: "", photoUrl: "", displayOrder: 0 });
+  await signOut(auth);
+  await signInWithEmailAndPassword(auth, "grace.atim@sun.ac.ug", "sues2026");
+  await ensureProfile();
+  let futureBlocked = true;
+  try { await submitVote(db, auth, { electionId: EID4, positionId: "pos_fs", candidateId: "cand_fs1" }); futureBlocked = false; }
+  catch (e) { futureBlocked = e.code === "permission-denied"; }
+  ok("future start time blocks voting", futureBlocked);
+  await signOut(auth);
+
   console.log("\n==== " + (fails === 0 ? "ALL RULES CHECKS PASSED" : fails + " FAILURE(S)") + " ====");
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.log("ERR", e.message); process.exit(1); });
