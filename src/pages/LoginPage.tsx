@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Vote } from "lucide-react";
 import { authService } from "../services";
 import { Button } from "../components/ui";
 
@@ -31,9 +30,11 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-white p-4">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-10 text-center">
-          <div className="w-12 h-12 bg-primary-900 flex items-center justify-center mb-6 rounded-sm">
-            <Vote size={24} className="text-white" />
-          </div>
+          <img
+            src="/sues-logo.jpg"
+            alt="SUES logo"
+            className="w-20 h-20 object-contain mb-6 rounded-sm"
+          />
           <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-2">Soroti University Engineering Society</h2>
           <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">Elections Portal</h1>
         </div>

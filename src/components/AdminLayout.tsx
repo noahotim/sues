@@ -80,8 +80,8 @@ export default function AdminLayout() {
       >
         <div className="px-6 py-5 border-b border-primary-900">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-sm bg-white flex items-center justify-center">
-              <LucideIcons.Vote size={20} className="text-primary-900" />
+            <div className="w-9 h-9 rounded-sm bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
+              <img src="/sues-logo.jpg" alt="SUES logo" className="w-full h-full object-contain p-0.5" />
             </div>
             <div>
               <h1 className="text-sm font-bold tracking-widest uppercase">SUES</h1>
@@ -146,7 +146,7 @@ export default function AdminLayout() {
             <LucideIcons.Menu size={22} />
           </button>
           <div className="flex items-center gap-2">
-            <LucideIcons.Vote size={18} className="text-primary-900" />
+            <img src="/sues-logo.jpg" alt="" className="w-5 h-5 object-contain" />
             <span className="font-bold text-sm tracking-widest uppercase">SUES</span>
           </div>
           <div className="w-10" />
