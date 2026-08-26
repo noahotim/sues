@@ -1,7 +1,7 @@
 import { auth, db, functions } from "../lib/firebase";
 import { collection, doc, getDocs, getDoc, setDoc, updateDoc, serverTimestamp, query, where } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
-import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 
 export interface UserProfile {
   id: string;
@@ -11,14 +11,61 @@ export interface UserProfile {
 }
 
 export const authService = {
-  signInWithGoogle: async () => {
+  signInWithGoogle: async (): Promise<{ user: FirebaseUser | null; error: string | null; redirecting?: boolean }> => {
     try {
       const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const email = result.user.email;
+
+      // Prefer popup; some browsers block it, in which case fall back to a
+      // full-page redirect (works everywhere, immune to popup blockers).
+      let result;
+      try {
+        result = await signInWithPopup(auth, provider);
+      } catch (popupErr: any) {
+        const code = String(popupErr?.code || "");
+        if (
+          code === "auth/popup-blocked" ||
+          code === "auth/popup-request-pending" ||
+          code === "auth/cancelled-popup-request" ||
+          code === "auth/operation-not-supported-in-this-environment"
+        ) {
+          await signInWithRedirect(auth, provider);
+          return { user: null, error: null, redirecting: true };
+        }
+        return { user: null, error: popupErr?.message || "Authentication failed" };
+      }
+
+      const finalized = await authService.finalizeSignIn(result.user);
+      if (finalized.error) return { user: null, error: finalized.error };
+      return { user: result.user, error: null };
+    } catch (error: any) {
+      return { user: null, error: error.message };
+    }
+  },
+
+  /**
+   * Handles the return trip from `signInWithRedirect`. Call once on app/login
+   * page load - resolves with the signed-in user (after the eligibility gate
+   * and profile bootstrap) or null when there is no pending redirect.
+   */
+  resolveRedirectSignIn: async (): Promise<{ user: FirebaseUser | null; error: string | null }> => {
+    try {
+      const result = await getRedirectResult(auth);
+      if (!result || !result.user) return { user: null, error: null };
+      const finalized = await authService.finalizeSignIn(result.user);
+      if (finalized.error) return { user: null, error: finalized.error };
+      return { user: result.user, error: null };
+    } catch (error: any) {
+      return { user: null, error: error.message };
+    }
+  },
+
+  /** Eligibility gate + profile bootstrap shared by both sign-in methods. */
+  finalizeSignIn: async (fbUser: FirebaseUser): Promise<{ ok: boolean; error: string | null }> => {
+    try {
+      const email = fbUser.email;
       if (!email) {
         await signOut(auth);
-        return { user: null, error: "The sign-in provider did not return an email address." };
+        return { ok: false, error: "The sign-in provider did not return an email address." };
       }
 
       // Eligibility gate: only emails on the allowed register (eligible_emails)
@@ -34,7 +81,7 @@ export const authService = {
       if (!onRegister.exists() && !onRoster) {
         await signOut(auth);
         return {
-          user: null,
+          ok: false,
           error: "Your email is not authorized to access this voting system. Contact the election administrator.",
         };
       }
@@ -42,7 +89,7 @@ export const authService = {
       // Ensure a profile doc exists. Roles come from the register entry (no
       // Cloud Functions required): seeded staff emails get their admin role,
       // everyone else defaults to VOTER.
-      const profileRef = doc(db, "users", result.user.uid);
+      const profileRef = doc(db, "users", fbUser.uid);
       const profileSnap = await getDoc(profileRef).catch(() => null);
       if (profileSnap && !profileSnap.exists()) {
         let role = "VOTER";
@@ -51,16 +98,16 @@ export const authService = {
         }
         await setDoc(profileRef, {
           email,
-          fullName: result.user.displayName || "Unknown User",
+          fullName: fbUser.displayName || "Unknown User",
           role,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
       }
 
-      return { user: result.user, error: null };
+      return { ok: true, error: null };
     } catch (error: any) {
-      return { user: null, error: error.message };
+      return { ok: false, error: error.message };
     }
   },
 

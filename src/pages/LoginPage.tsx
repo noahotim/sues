@@ -1,19 +1,37 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authService } from "../services";
-import { Button } from "../components/ui";
+import { Button, Spinner } from "../components/ui";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
+
+  // Handle the return trip when sign-in used the full-page redirect flow.
+  useEffect(() => {
+    (async () => {
+      const res = await authService.resolveRedirectSignIn();
+      if (res.user) {
+        navigate("/admin/dashboard", { replace: true });
+      } else if (res.error) {
+        setError(res.error);
+      }
+    })();
+  }, [navigate]);
 
   async function handleGoogleSignIn() {
     setError("");
     setSubmitting(true);
 
     try {
-      const { user, error } = await authService.signInWithGoogle();
+      const { user, error, redirecting } = await authService.signInWithGoogle();
+      if (redirecting) {
+        // Browser is navigating away to Google; nothing else to do here.
+        setRedirecting(true);
+        return;
+      }
       if (error || !user) {
         setError(error || "Authentication failed");
         return;
@@ -46,8 +64,15 @@ export default function LoginPage() {
             </div>
           )}
 
-          <Button onClick={handleGoogleSignIn} disabled={submitting} className="w-full" size="lg">
-            {submitting ? "Signing in..." : "Sign in with Google"}
+          {redirecting && (
+            <div className="flex items-center justify-center gap-2 text-sm text-slate-600">
+              <Spinner size={16} />
+              Redirecting to Google sign-in…
+            </div>
+          )}
+
+          <Button onClick={handleGoogleSignIn} disabled={submitting || redirecting} className="w-full" size="lg">
+            {submitting || redirecting ? "Signing in..." : "Sign in with Google"}
           </Button>
 
           <details className="text-sm text-slate-600 border-t border-slate-200 pt-4">
