@@ -10,3 +10,13 @@ ui-debug.log
 emu-run.log
 emu-run.err.log
 e2e-emulator.log
+
+dist/
+.vercel/
+.firebase/
+vite.log
+emu-run.log
+fb-login.log
+functions/lib/
+scripts/fb-*.cjs
+scripts/diag-*.cjs
