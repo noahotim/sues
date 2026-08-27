@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "react-router-dom";
-import { BarChart3, Trophy, FileDown, ArrowLeft } from "lucide-react";
+import { BarChart3, Trophy, FileDown, ArrowLeft, Lock } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   electionService,
@@ -159,6 +159,11 @@ export default function ResultsPage() {
     (selectedElection.status === "closed" ||
       selectedElection.status === "published" ||
       (selectedElection.endTime && new Date(selectedElection.endTime).getTime() < Date.now()));
+
+  // Voters (public /results) only see tallies once the election is over - the
+  // results are locked while voting is in progress and appear automatically the
+  // moment polls close. Admins (/admin/results) keep the live realtime preview.
+  const isPublicLocked = isPublicView && !!selectedElectionId && !isElectionOver;
 
   /** SUES-branded Declaration of Results PDF (Uganda EC format). */
   async function downloadDeclarationForm() {
@@ -591,11 +596,13 @@ export default function ResultsPage() {
             <p className="text-sm text-slate-600 mt-2">
               {isElectionOver
                 ? "Results are official. The ballot has been counted and declared."
+                : isPublicLocked
+                ? "Results are released automatically once this election closes."
                 : "Results are calculated from actual cast votes and update in real time."}
             </p>
           </div>
         </div>
-        {selectedElection && positionResults.length > 0 && (
+        {selectedElection && positionResults.length > 0 && !isPublicLocked && (
           <div className="flex flex-col items-end gap-2 mt-4 sm:mt-0">
             {isElectionOver && (
               <Button onClick={downloadDeclarationForm} className="!bg-success-600 hover:!bg-success-700">
@@ -654,6 +661,15 @@ export default function ResultsPage() {
             title="Select an election"
             message="Choose an election above to view its results."
           />
+        </Card>
+      ) : isPublicLocked ? (
+        <Card className="p-8 text-center">
+          <Lock size={40} className="text-slate-400 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-slate-900 mb-2">Results not yet available</h3>
+          <p className="text-sm text-slate-500 max-w-md mx-auto">
+            Results will appear here automatically as soon as this election closes. Final tallies are
+            released only after voting has ended.
+          </p>
         </Card>
       ) : (
         <>
