@@ -109,8 +109,10 @@ service cloud.firestore {
     }
 
     // ---------- Voter roster ----------
+    // READ: open to all signed-in users so the results page can show turnout
+    // metrics. In a university society the eligible-voter list is semi-public.
     match /voter_roster/{rosterId} {
-      allow read: if isSignedIn() && (isAdminRole() || resource.data.voterEmail == userEmail());
+      allow read: if isSignedIn();
       // Managers maintain the register. Voters may ONLY flip their own turnout
       // flags (cosmetic), and only after a valid vote receipt exists.
       allow update: if isElectionManager()
@@ -147,8 +149,10 @@ service cloud.firestore {
     // The vote document id MUST equal the unguessable nonce from the caller's
     // receipt. Rules verify ownership + candidate validity; because the id is
     // unique, a replayed nonce cannot create a second record.
+    // READ: open to all signed-in users — the documents are anonymous (no voter
+    // identity), so revealing them does not compromise ballot secrecy.
     match /votes/{voteId} {
-      allow read: if isAdminRole();
+      allow read: if isSignedIn();
       allow create: if isSignedIn()
         && request.resource.data.keys().hasOnly(['electionId', 'positionId', 'candidateId', 'createdAt'])
         && voteId.size() >= 20
