@@ -1,31 +1,97 @@
 # SUES Election Management System
 
-An online voting platform built for the **Soroti University Engineering Society (SUES)**. It lets an election committee set up elections, manage candidates and eligible voters, lets members cast secure and anonymous ballots, and provides real-time results with full audit logging.
+An online voting platform built for the **Soroti University Engineering Society (SUES)**. It lets an election committee set up elections, manage candidates and eligible voters, lets members cast secure and anonymous ballots, and provides real-time results with full audit logging and official declaration forms.
 
 ## Features
 
-- **Role-based access** — Chairperson, Secretary, Polling Assistant, and Voter, with a permission system that controls what each role sees and does.
-- **Election management** — Create elections, configure positions, and manage lifecycle status (draft → active → closed → published).
-- **Candidate management** — Add candidates per position with bio and photo.
-- **Voter roster** — Add eligible voters individually or bulk-import from a **local CSV file** (read in the browser; the file never leaves the device) or by pasting CSV text.
-- **Secure voting** — Votes are recorded without any voter identifier to preserve anonymity. Duplicate votes are blocked via per-user receipts, and all voting goes through a server-side Cloud Function.
-- **Results** — Live tallies per position with turnout metrics.
-- **Audit trail** — Every privileged action (casting a vote, changing roles) is logged.
+### Voting & Ballots
+- **Atomic one-ballot-per-position voting** — a deterministic receipt document (`vote_receipts/{email}__{election}__{position}`) is created first; a second attempt for the same position collides atomically and is rejected. No Cloud Functions needed.
+- **Anonymous ballots** — votes are stored in `votes/{nonce}` where the nonce is a cryptographically random string. No voter identity is ever written to the ballot record.
+- **Multi-election ballot page** — all active elections appear on a single voting page. The voter completes every available ballot in one pass.
+- **Poll-window enforcement** — the system checks election start/end times (stored as Firestore Timestamps) and shows "Polls have not opened yet" or "Polls have closed" states per election. Ballots are disabled outside the voting window.
+- **Unopposed candidate affirmation** — a lone candidate must receive at least 51% of votes cast to be affirmed; otherwise the nomination is not confirmed.
+- **Real-time results** — tallies update live via Firestore subscriptions as votes are cast.
+- **PDF export** — download a formatted results report (bar charts, turnout summary) via jspdf (lazy-loaded, never slows the initial page).
+- **EC-style Declaration of Results** — a formal SUES-branded PDF with the university logo, navy header, position-by-position result tables with winner declarations, turnout summary, certification statement, and four signature lines (Returning Officer, Candidate/Representative, two Observers). Automatically available when polls close.
+- **Voter sign-out bar** — the voting booth shows the signed-in voter's name and a one-click sign-out button.
+- **Technical support contacts** — displayed on the login page and vote booth footer (Arikod Charles, Chairperson EC; Abel Ea, Outgoing President).
+
+### Voter Registration
+- **System-wide register** — CSV upload populates both a per-election roster AND the `eligible_emails` collection. Register members are eligible in every active election automatically.
+- **Register-member auto-provision** — when a register member visits any active election for the first time, a per-election roster row is created automatically for turnout tracking.
+- **CSV local-file import** — voters are read from a local `.csv` file (never leaves the browser). Supports `email,name` rows, header rows, quotes, and CRLF/BOM.
+- **Deduplication** — duplicate emails within the same file are skipped; existing roster rows are preserved (voting state never reset on re-import).
+
+### Admin Dashboard
+- **Election-scoped** — select any election from a dropdown to see its specific metrics.
+- **Real-time** — candidate counts, eligible voters, and turnout update live via Firestore subscriptions.
+- **Results with winner highlights** — progress bars, vote counts, percentages, unopposed badges, and affirmation status.
+
+### Audit Logging
+- **Real-time** — audit entries appear the instant an operation happens (no page refresh needed).
+- **Comprehensive** — every mutation is logged: election create/update/delete, position create/update/delete, candidate create/update/delete, roster import/add/remove, vote cast (anonymous), role updates.
+- **Ballot secrecy preserved** — `CAST_VOTE` audit entries carry no voter identity; all other entries record the acting user's email.
+
+### Authentication & Access Control
+- **Google sign-in** with popup-first (redirect fallback for popup blockers).
+- **Account chooser** — `prompt: "select_account"` forces the Google account picker so users can switch between accounts.
+- **Multi-layer persistence** — `indexedDBLocalPersistence` + `browserLocalPersistence` + `browserSessionPersistence` to survive browser storage partitioning.
+- **Redirect state guard** — a sessionStorage flag prevents stale redirect results from causing dead-ends.
+- **Eligibility gate** — staff (register entry with a non-VOTER role) OR voters present on an actual roster may sign in. Plain VOTER register entries alone are not sufficient for login.
+- **Role from Firestore profile** — no Cloud Functions needed; roles are read from `users/{uid}.role` with an `exists()` guard for first-time profile creation.
+
+### UI & Design
+- **SUES branding** — logo on every page (login, sidebar, mobile header, admin headers, vote booth, results, PDF exports), favicon, and the browser tab.
+- **Code-split pages** — React.lazy per page + jspdf dynamic import. 18 chunks; heavy libs load on demand.
+- **Responsive layout** — admin sidebar with mobile hamburger menu, voter-facing pages adapt to all screen sizes.
+- **Permission-guarded navigation** — the sidebar shows only items the current role can access. Non-admin users are redirected to `/vote` (not into an infinite loop on `/admin/dashboard`).
 
 ## Tech Stack
 
-| Layer     | Technology                                            |
-| --------- | ----------------------------------------------------- |
-| Frontend  | React 18, TypeScript, Vite, Tailwind CSS, React Router |
-| Backend   | Firebase (Firestore, Auth, Storage, Cloud Functions)  |
-| Icons     | lucide-react                                          |
+| Layer     | Technology                                                   |
+| --------- | ------------------------------------------------------------ |
+| Frontend  | React 18, TypeScript, Vite, Tailwind CSS, React Router      |
+| Backend   | Firebase (Firestore, Auth) — **Spark plan** (no Cloud Functions, no Storage) |
+| PDF       | jspdf (lazy-loaded)                                          |
+| Icons     | lucide-react                                                 |
+
+## Deployment
+
+| Platform          | URL                                                |
+| ----------------- | -------------------------------------------------- |
+| Firebase Hosting  | https://sues-vote-live.web.app (primary)           |
+| Vercel            | https://sues-tau.vercel.app (parity)               |
+| Firebase project  | `sues-vote-live` (user-owned, `otim.no25@gmail.com`) |
+
+### Deploy commands
+
+```bash
+# Hide .env (contains emulator/dev config) before production builds
+Move-Item .env .env.dev-backup
+
+# Clear Vite cache and build
+Remove-Item -Recurse -Force node_modules/.vite
+npm run build
+
+# Deploy Firestore rules + hosting
+$env:FIREBASE_SKIP_FRAMEWORK_SETUP="1"
+npx firebase deploy --only firestore:rules,hosting --project sues-vote-live
+
+# Deploy to Vercel
+npx vercel --prod --yes
+
+# Restore .env
+Move-Item .env.dev-backup .env
+```
+
+> **Important:** The `.env` file contains emulator configuration and the old `sues-d7a7f` project keys. The production build falls back to hardcoded `sues-vote-live` defaults when env vars are absent. Always hide `.env` and clear the Vite cache before building for production.
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ and npm
-- A Firebase project (or access to the existing `sues-d7a7f` project)
+- Node.js 24+ and npm
+- A Firebase project (or access to the existing `sues-vote-live` project)
 
 ### Running locally
 
@@ -35,32 +101,97 @@ cp .env.example .env   # or copy .env.example to .env on Windows
 npm run dev
 ```
 
-Open http://localhost:5173. The Firebase configuration is read from environment variables (see `.env.example`). If you are contributing against the live project, the app connects to the shared backend automatically — be careful not to create real test data in production.
+Open http://localhost:5173. The app connects to the Firebase emulators automatically when `VITE_USE_EMULATORS=true` is set in `.env`.
 
 > **Note:** The `.env` file is gitignored. The Firebase keys are web-safe public API keys, but keeping them out of the repository is good practice.
+
+### Local demo with the Emulator Suite
+
+To bring up the **whole demo with one command** — start the Auth/Firestore/Storage emulators, seed the election/candidates/roster, and start the Vite dev server — run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File start-demo.ps1
+```
+
+Then open http://localhost:5173 and sign in with a demo account:
+
+- **Chairperson** — `chair.sues@sun.ac.ug` (password: any / `sues2026` in emulator)
+- **Secretary** — `secretary.sues@sun.ac.ug`
+- **Voter** — `apio.samson@sun.ac.ug` (any of the 5 CSV voters)
+
+> The emulator database is in-memory, so it starts empty every time. `start-demo.ps1` re-seeds it automatically. The seed scripts live in `functions/` (`setup-vote-demo.mjs`, `verify-demo.mjs`, `demo-full-process.mjs`).
 
 ## Project Structure
 
 ```
 src/
-  components/   # Shared UI components and admin layout
-  lib/          # Auth context, constants (roles/permissions), Firebase init
-  pages/        # One file per route (login, vote, admin/*)
-  services/     # Data access layer for Firestore + Cloud Functions
+  components/       Shared UI components (Card, Button, Badge, etc.) and AdminLayout
+  lib/              Auth context, constants (roles/permissions), Firebase init
+  pages/            One file per route (login, vote, results, admin/*)
+  services/         Data access layer for Firestore (election, candidate, roster,
+                    vote, audit, auth services)
 functions/
-  src/index.ts  # Cloud Functions (castVote, setUserRole, onUserCreated)
+  src/index.ts      Legacy Cloud Functions (no longer used for voting)
+  setup-vote-demo.mjs   Seeds demo data for the emulator
+  verify-demo.mjs       Verifies the full demo lifecycle
+  test-string-times.mjs Regression test for Timestamp-based voting
+scripts/
+  fb-backfill-times.cjs Production backfill: converts ISO strings to Timestamps
+firestore.rules     Comprehensive security rules for all collections
 ```
+
+## Security Rules
+
+The Firestore security rules enforce all invariants server-side:
+
+| Collection        | Read                    | Write                                  |
+| ----------------- | ----------------------- | -------------------------------------- |
+| `elections`       | Any signed-in user      | Election managers (Chair/Secretary)    |
+| `positions`       | Admins + active elections| Election managers                      |
+| `candidates`      | Admins + active elections| Election managers                      |
+| `voter_roster`    | Admins + own row        | Managers (full) / voters (own turnout flags only) |
+| `vote_receipts`   | Own receipts            | Create-once (atomic duplicate lock)    |
+| `votes`           | Admins only             | Create-once (nonce-keyed, anonymous)   |
+| `eligible_emails` | Admins + own entry      | Election managers                      |
+| `audit_logs`      | Chairperson only        | Create with action validation          |
+| `users`           | Own profile + admins    | Self (name) / Chair (roles)            |
+
+Key rules:
+- `isOnRosterNow()` checks both the per-election roster AND the system-wide register (`eligible_emails`).
+- `electionOpen()` compares `request.time` against Firestore Timestamps (not ISO strings).
+- `CAST_VOTE` audit entries are anonymous (no `actorEmail`); all other audit actions require the actor's email to match the authenticated user.
+- `vote_receipts` use a deterministic document ID (`email__electionId__positionId`) so a second attempt collides atomically.
 
 ## Roles & Permissions
 
-| Role              | Can do                                                                 |
-| ----------------- | ---------------------------------------------------------------------- |
-| Chairperson       | Full access — elections, candidates, roster, users, results, audit logs, publish results |
-| Secretary         | Elections, candidates, roster, results, voting                         |
-| Polling Assistant | Roster management (verification) and voting                            |
-| Voter             | Voting only                                                             |
+| Role              | Permissions                                                          |
+| ----------------- | -------------------------------------------------------------------- |
+| Chairperson       | Dashboard, Elections, Candidates, Roster, Results, Users, Audit, Publish, Vote |
+| Secretary         | Dashboard, Elections, Candidates, Roster, Results, Vote              |
+| Polling Assistant | Dashboard, Roster, Vote                                              |
+| Voter             | Vote, View Results                                                   |
 
-Roles are enforced both in the UI (permission guard) and server-side via Firestore security rules and custom claims set by Cloud Functions. The first user to sign up is automatically assigned the Chairperson role.
+Roles are enforced in the UI (permission guard) and server-side via Firestore security rules. Roles are read from the Firestore profile document (`users/{uid}.role`), not from Cloud Function custom claims.
+
+## Scripts
+
+| Command                          | Description                                  |
+| -------------------------------- | -------------------------------------------- |
+| `npm run dev`                    | Start the Vite dev server                    |
+| `npm run build`                  | Type-check and build the frontend            |
+| `npm run preview`                | Preview the production build                 |
+| `npm run typecheck`              | Run the TypeScript type checker              |
+| `cd functions && npm run build`  | Compile the Cloud Functions (legacy)         |
+| `cd functions && npm run deploy` | Deploy the Cloud Functions (legacy)          |
+
+### Test scripts
+
+| Command                                          | Description                                      |
+| ------------------------------------------------ | ------------------------------------------------ |
+| `node functions/test-string-times.mjs`           | Regression test for Timestamp-based voting       |
+| `node functions/verify-demo.mjs`                 | Verifies the full demo lifecycle (9 checks)      |
+| `node functions/demo-full-process.mjs`           | End-to-end demo: seed → vote → verify → results  |
+| `node scripts/fb-backfill-times.cjs`             | Backfill production elections: ISO → Timestamp   |
 
 ## Signing in
 
@@ -68,54 +199,17 @@ Every account uses **Google sign-in**. After authenticating, the system checks w
 
 | Person                        | How they sign in                                                                                                   |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Chairperson**               | Google sign-in with their registered `@sun.ac.ug` address (e.g. `chair.sues@sun.ac.ug`). Full admin access.        |
-| **Secretary**                 | Google sign-in with their registered `@sun.ac.ug` address (e.g. `secretary.sues@sun.ac.ug`). Election-manager admin. |
-| **Polling Assistant**         | Google sign-in with their registered `@sun.ac.ug` address. Can manage the roster and vote.                          |
-| **Voter (student)**           | Google sign-in with the exact email imported onto that election's roster via CSV. Voting only.                      |
-
-> **Demo note:** Against the Firebase Emulator Suite, the Auth emulator accepts any password, so the demo accounts (password `sues2026`) work without a real Google account. In production, the real Google account must match the registered email.
+| **Chairperson**               | Google sign-in with their registered email. Full admin access.                                                     |
+| **Secretary**                 | Google sign-in with their registered email. Election-manager admin.                                                |
+| **Polling Assistant**         | Google sign-in with their registered email. Can manage the roster and vote.                                        |
+| **Voter (student)**           | Google sign-in with the exact email imported onto a roster via CSV. Voting + results access.                        |
 
 ### Importing voters from a local CSV file
 
 1. Sign in as an admin (Chairperson/Secretary/Assistant) and open **Voter Roster**.
 2. Select the election, then click **Import CSV**.
 3. Click **Choose a CSV file from your computer** and pick a `.csv` file. The file is parsed locally (supports `email,name` rows, a header row, quotes, and CRLF/BOM).
-4. Review the loaded rows in the text area, then click **Import Voters** to add them to the roster.
-
-## Cloud Functions
-
-- `onUserCreated` — creates the user profile document and assigns a default role on sign-up.
-- `castVote` — validates the election is active, the position/candidate belong to it, the voter is on the roster, and the voter has not already voted for that position. Writes the anonymous vote, a per-user receipt, updates the roster, and appends an audit log in a single transaction.
-- `setUserRole` — lets the Chairperson assign roles (via custom claims).
-
-The Firestore security rules forbid direct client writes to `votes` and `audit_logs`; all sensitive writes go through the Cloud Functions.
-
-## Scripts
-
-| Command                          | Description                        |
-| -------------------------------- | ---------------------------------- |
-| `npm run dev`                    | Start the Vite dev server          |
-| `npm run build`                  | Type-check and build the frontend  |
-| `npm run preview`                | Preview the production build       |
-| `npm run typecheck`              | Run the TypeScript type checker    |
-| `cd functions && npm run build`  | Compile the Cloud Functions        |
-| `cd functions && npm run deploy` | Deploy the Cloud Functions         |
-
-### Local demo with the Emulator Suite
-
-The app is wired to the Firebase emulators when `VITE_USE_EMULATORS=true` (set in `.env`). To bring up the **whole demo with one command** — start the Auth/Firestore/Functions/Storage emulators, seed the election/candidates/roster, and start the Vite dev server — run:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File start-demo.ps1
-```
-
-Then open http://localhost:5173 and sign in with a demo account (password `sues2026`):
-
-- **Chairperson** — `chair.sues@sun.ac.ug`
-- **Secretary** — `secretary.sues@sun.ac.ug`
-- **Voter** — `apio.samson@sun.ac.ug` (any of the 5 CSV voters)
-
-> The emulator database is in-memory, so it starts empty every time. `start-demo.ps1` re-seeds it automatically. The seed scripts live in `functions/` (`setup-vote-demo.mjs`, `reset-votes.mjs`, `verify-demo.mjs`, `demo-full-process.mjs`).
+4. Review the loaded rows in the text area, then click **Import Voters** to add them to the roster AND the system-wide register.
 
 ## Contributing
 
@@ -154,6 +248,9 @@ Contributions are welcome. Please follow the standard fork-and-pull-request work
 ## Security Notes
 
 - Votes are stored **anonymously** — no voter ID is attached to a vote document.
-- Double voting is prevented by receipts and roster flags, enforced inside a transaction.
-- Audit logs are read-only via the rules and only visible to the Chairperson.
-- When testing, prefer a dedicated Firebase test project or the Emulator Suite over the live database.
+- Double voting is prevented by deterministic receipt document IDs — a second attempt collides atomically and is rejected by Firestore.
+- Audit logs are read-only for non-Chairpersons and only visible to the Chairperson.
+- All voting goes through client-side receipt + ballot writes enforced by Firestore security rules (no Cloud Functions required on the Spark plan).
+- Election times are stored as Firestore Timestamps and enforced server-side by security rules.
+- The system-wide register (`eligible_emails`) grants eligibility across all active elections, but login is restricted to staff (non-VOTER register entries) or voters with at least one roster row.
+- When testing, prefer the Firebase Emulator Suite over the live database.
