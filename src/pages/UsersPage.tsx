@@ -1,11 +1,19 @@
 import { useEffect, useState, useCallback } from "react";
-import { ShieldCheck, Search } from "lucide-react";
+import { ShieldCheck, UserPlus, Search, Trash2 } from "lucide-react";
 import { useAuth } from "../lib/auth";
-import { authService, type UserProfile as Profile } from "../services";
+import {
+  authService,
+  type RegisterEntry,
+} from "../services";
 import { ROLES } from "../lib/constants";
 import {
   Card,
   Badge,
+  Button,
+  Input,
+  Select,
+  Modal,
+  ConfirmDialog,
   LoadingState,
   ErrorState,
   EmptyState,
@@ -13,19 +21,30 @@ import {
 
 export default function UsersPage() {
   const { profile: currentUser } = useAuth();
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [register, setRegister] = useState<RegisterEntry[]>([]);
   const roles = ROLES;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [search, setSearch] = useState("");
   const [updating, setUpdating] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Add-person modal state
+  const [showAdd, setShowAdd] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newRole, setNewRole] = useState("VOTER");
+  const [formError, setFormError] = useState("");
+
+  // Delete confirmation state
+  const [toDelete, setToDelete] = useState<RegisterEntry | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(false);
     try {
-      const { data: p } = await authService.getAllProfiles();
-      if (p) setProfiles(p);
+      const { data: r } = await authService.getRegister();
+      if (r) setRegister(r);
     } catch {
       setError(true);
     } finally {
@@ -36,27 +55,6 @@ export default function UsersPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  async function handleRoleChange(userId: string, newRoleId: string) {
-    setUpdating(userId);
-    try {
-      await authService.updateUserRole(userId, newRoleId);
-      const { data: p } = await authService.getAllProfiles();
-      if (p) setProfiles(p);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to update role");
-    } finally {
-      setUpdating(null);
-    }
-  }
-
-  const filteredProfiles = search
-    ? profiles.filter(
-        (p) =>
-          p.email.toLowerCase().includes(search.toLowerCase()) ||
-          p.fullName.toLowerCase().includes(search.toLowerCase())
-      )
-    : profiles;
 
   function getRoleLabel(roleId: string): string {
     return roles.find((r) => r.id === roleId)?.label ?? roleId;
@@ -69,21 +67,95 @@ export default function UsersPage() {
     return "neutral";
   }
 
-  if (loading) return <LoadingState message="Loading users..." />;
-  if (error) return <ErrorState message="We could not load the users." onRetry={load} />;
+  function isSelf(email: string): boolean {
+    return currentUser?.email?.toLowerCase() === email.trim().toLowerCase();
+  }
+
+  async function handleRoleChange(email: string, newRoleId: string) {
+    setUpdating(email);
+    try {
+      await authService.updateRegisterRole(email, newRoleId);
+      // Update local state optimistically
+      setRegister((prev) =>
+        prev.map((e) => (e.email === email ? { ...e, roleId: newRoleId } : e))
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to update role");
+    } finally {
+      setUpdating(null);
+    }
+  }
+
+  function openAdd() {
+    setNewName("");
+    setNewEmail("");
+    setNewRole("VOTER");
+    setFormError("");
+    setShowAdd(true);
+  }
+
+  async function handleAdd() {
+    setFormError("");
+    setBusy(true);
+    try {
+      const { data, error: addErr } = await authService.addPerson(newEmail, newName, newRole);
+      if (addErr) {
+        setFormError(addErr);
+        return;
+      }
+      if (data) {
+        setRegister((prev) => [...prev, data]);
+        setShowAdd(false);
+      }
+      load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!toDelete) return;
+    setBusy(true);
+    try {
+      await authService.deletePerson(toDelete.email);
+      setRegister((prev) => prev.filter((e) => e.email !== toDelete.email));
+      setToDelete(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to delete person");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const filtered = search
+    ? register.filter(
+        (e) =>
+          e.email.toLowerCase().includes(search.toLowerCase()) ||
+          (e.fullName || "").toLowerCase().includes(search.toLowerCase())
+      )
+    : register;
+
+  if (loading) return <LoadingState message="Loading registered users..." />;
+  if (error) return <ErrorState message="We could not load the registered users." onRetry={load} />;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="mb-8 border-b-2 border-primary-900 pb-4">
-        <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-1">SUES Administration</h2>
-        <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">User Management</h1>
-        <p className="text-sm text-slate-600 mt-2">
-          View all users and assign administrative roles.
-        </p>
+      <div className="mb-8 border-b-2 border-primary-900 pb-4 flex items-start justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-1">SUES Administration</h2>
+          <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">User Management</h1>
+          <p className="text-sm text-slate-600 mt-2">
+            Manage every registered person: add, remove, and assign their roles. Adding someone
+            provisions their account; removing someone revokes their access.
+          </p>
+        </div>
+        <Button onClick={openAdd}>
+          <UserPlus size={16} /> Add Person
+        </Button>
       </div>
 
       {/* Search */}
-      {profiles.length > 0 && (
+      {register.length > 0 && (
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input
@@ -96,17 +168,22 @@ export default function UsersPage() {
         </div>
       )}
 
-      {profiles.length === 0 ? (
+      {register.length === 0 ? (
         <Card className="p-6">
           <EmptyState
             icon={<ShieldCheck size={48} />}
-            title="No users found"
-            message="Users will appear here once they sign up for an account."
+            title="No registered persons yet"
+            message="Use the 'Add Person' button to provision your first voter or staff member."
+            action={
+              <Button onClick={openAdd}>
+                <UserPlus size={16} /> Add Person
+              </Button>
+            }
           />
         </Card>
-      ) : filteredProfiles.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <Card className="p-6">
-          <p className="text-sm text-slate-500 text-center py-4">No users match your search.</p>
+          <p className="text-sm text-slate-500 text-center py-4">No registered persons match your search.</p>
         </Card>
       ) : (
         <Card className="overflow-hidden rounded-sm shadow-none">
@@ -118,28 +195,29 @@ export default function UsersPage() {
                   <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Email</th>
                   <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Current Role</th>
                   <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider">Change Role</th>
+                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider w-16"></th>
                 </tr>
               </thead>
               <tbody>
-                {filteredProfiles.map((p) => (
-                  <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                {filtered.map((e) => (
+                  <tr key={e.email} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-slate-900">
-                      {p.fullName || "—"}
-                      {p.id === currentUser?.id && (
+                      {e.fullName || "—"}
+                      {isSelf(e.email) && (
                         <span className="ml-2 text-xs text-primary-600 font-normal">(You)</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{p.email}</td>
+                    <td className="px-4 py-3 text-slate-600">{e.email}</td>
                     <td className="px-4 py-3">
-                      <Badge variant={getRoleBadgeVariant(p.roleId)}>
-                        {getRoleLabel(p.roleId)}
+                      <Badge variant={getRoleBadgeVariant(e.roleId)}>
+                        {getRoleLabel(e.roleId)}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
                       <select
-                        value={p.roleId}
-                        onChange={(e) => handleRoleChange(p.id, e.target.value)}
-                        disabled={updating === p.id || p.id === currentUser?.id}
+                        value={e.roleId}
+                        onChange={(ev) => handleRoleChange(e.email, ev.target.value)}
+                        disabled={updating === e.email || isSelf(e.email)}
                         className="text-xs px-2.5 py-1.5 rounded-sm border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary-900 focus:border-primary-900 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {roles.map((r) => (
@@ -148,6 +226,16 @@ export default function UsersPage() {
                           </option>
                         ))}
                       </select>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => setToDelete(e)}
+                        disabled={isSelf(e.email)}
+                        title={isSelf(e.email) ? "You cannot remove yourself" : "Remove person"}
+                        className="inline-flex items-center justify-center p-2 rounded-sm text-slate-400 hover:text-error-700 hover:bg-error-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -169,6 +257,57 @@ export default function UsersPage() {
           ))}
         </div>
       </Card>
+
+      {/* Add Person Modal */}
+      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Person">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500">
+            Provision a new person by name, email, and role. They will be able to sign in
+            with their Google account using this email.
+          </p>
+          <Input
+            label="Full Name"
+            value={newName}
+            onChange={setNewName}
+            placeholder="e.g. Apio Samson"
+            required
+          />
+          <Input
+            label="Email"
+            type="email"
+            value={newEmail}
+            onChange={setNewEmail}
+            placeholder="e.g. apio.samson@sun.ac.ug"
+            required
+          />
+          <Select
+            label="Role"
+            value={newRole}
+            onChange={setNewRole}
+            options={roles.map((r) => ({ value: r.id, label: r.label }))}
+          />
+          {formError && <p className="text-sm text-error-600">{formError}</p>}
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setShowAdd(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAdd} disabled={busy}>
+              {busy ? "Adding..." : "Add Person"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete confirm */}
+      <ConfirmDialog
+        open={!!toDelete}
+        onClose={() => setToDelete(null)}
+        onConfirm={handleDelete}
+        title="Remove person"
+        message={`Remove ${toDelete?.fullName || toDelete?.email} from the system? This revokes their access to voting and the admin tools.`}
+        confirmLabel="Remove"
+        danger
+      />
     </div>
   );
 }

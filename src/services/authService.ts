@@ -1,5 +1,5 @@
 import { auth, db, functions } from "../lib/firebase";
-import { collection, doc, getDocs, getDoc, setDoc, updateDoc, serverTimestamp, query, where } from "firebase/firestore";
+import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, where } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { auditService } from "./auditService";
@@ -9,6 +9,17 @@ export interface UserProfile {
   email: string;
   fullName: string;
   roleId: string;
+}
+
+// A register entry (eligible_emails) is the master directory the chairperson
+// manages. Each entry has a name, email, and assigned role. It is what grants
+// (or revokes) a person's access to the system.
+export interface RegisterEntry {
+  id: string; // the email, lowercased
+  email: string;
+  fullName: string;
+  roleId: string;
+  addedAt?: any;
 }
 
 // Guards against double-redirects (a second click would overwrite the pending
@@ -216,6 +227,106 @@ export const authService = {
         });
       }
       auditService.log("USER_ROLE_UPDATED", "user", targetUid, { targetRole });
+      return { error: null };
+    } catch (error: any) {
+      return { error: error.message };
+    }
+  },
+
+  // ----- User-management (register) directory -----
+
+  /** Read the full register (eligible_emails). Admins can read all entries. */
+  getRegister: async (): Promise<{ data: RegisterEntry[] | null; error: string | null }> => {
+    try {
+      const snapshot = await getDocs(collection(db, "eligible_emails"));
+      const entries = snapshot.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          email: data.email || d.id,
+          fullName: (data.fullName as string) || "",
+          roleId: (data.role as string) || "VOTER",
+          addedAt: data.addedAt,
+        } as RegisterEntry;
+      });
+      return { data: entries, error: null };
+    } catch (error: any) {
+      return { data: null, error: error.message };
+    }
+  },
+
+  /**
+   * Add a person to the register with an assigned role. Creating an
+   * eligible_emails entry provisions the person: staff (non-VOTER) can sign in
+   * immediately; VOTERs gain system-wide eligibility (plus a roster row once
+   * they are uploaded to an election). Duplicate emails are refused.
+   */
+  addPerson: async (email: string, fullName: string, role: string) => {
+    try {
+      const em = email.trim().toLowerCase();
+      if (!em.includes("@")) return { data: null, error: "A valid email address is required." };
+      if (!fullName.trim()) return { data: null, error: "A name is required." };
+      const ref = doc(db, "eligible_emails", em);
+      const existing = await getDoc(ref);
+      if (existing.exists()) {
+        return { data: null, error: "That email is already registered. You can edit its role instead." };
+      }
+      await setDoc(ref, {
+        email: em,
+        fullName: fullName.trim(),
+        role,
+        addedAt: serverTimestamp(),
+      });
+      auditService.log("VOTER_ADDED", "voter", em, { role, source: "user_management" });
+      return { data: { id: em, email: em, fullName: fullName.trim(), roleId: role } as RegisterEntry, error: null };
+    } catch (error: any) {
+      return { data: null, error: error.message };
+    }
+  },
+
+  /**
+   * Update a person's role from the register. This also syncs the signed-in
+   * user's profile (users/{uid}.role) so the change takes effect immediately
+   * for a person who has already logged in.
+   */
+  updateRegisterRole: async (email: string, role: string) => {
+    try {
+      const em = email.trim().toLowerCase();
+      await updateDoc(doc(db, "eligible_emails", em), {
+        role,
+        updatedAt: serverTimestamp(),
+      });
+      // Sync the signed-in profile, if one exists for this email.
+      const users = await getDocs(query(collection(db, "users"), where("email", "==", em)));
+      for (const u of users.docs) {
+        try {
+          await updateDoc(u.ref, { role, updatedAt: serverTimestamp() });
+        } catch { /* profile may be unmanaged; register entry is authoritative */ }
+      }
+      auditService.log("USER_ROLE_UPDATED", "user", em, { role, source: "register" });
+      return { error: null };
+    } catch (error: any) {
+      return { error: error.message };
+    }
+  },
+
+  /**
+   * Remove a person from the register, revoking their access to the system.
+   * Their eligible_emails entry drives sign-in eligibility, so deleting it
+   * revokes access. The signed-in users profile (if any) is deleted too.
+   */
+  deletePerson: async (email: string) => {
+    try {
+      const em = email.trim().toLowerCase();
+      await deleteDoc(doc(db, "eligible_emails", em));
+      // Clean up the signed-in profile if present.
+      const users = await getDocs(query(collection(db, "users"), where("email", "==", em)));
+      for (const u of users.docs) {
+        try {
+          await deleteDoc(u.ref);
+        } catch { /* deletion may be restricted; access already revoked via register */ }
+      }
+      auditService.log("VOTER_REMOVED", "voter", em, { source: "user_management" });
       return { error: null };
     } catch (error: any) {
       return { error: error.message };
