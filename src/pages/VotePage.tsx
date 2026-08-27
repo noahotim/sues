@@ -50,7 +50,6 @@ export default function VotePage() {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-
   useEffect(() => {
     if (!authLoading && !session) {
       navigate("/login", { replace: true });
@@ -123,31 +122,49 @@ export default function VotePage() {
     navigate("/login", { replace: true });
   }
 
-  async function handleSubmitVote(electionId: string, positionId: string) {
+  async function handleSubmitBallot(electionId: string) {
     if (!session) return;
-    const key = `${electionId}:${positionId}`;
-    const candidateId = selections[key];
-    if (!candidateId) return;
 
-    // Strict window guard at submit time: never let a ballot through outside
-    // the election's official opening/closing times (rules also enforce this
-    // server-side, so this is defence-in-depth for immediate feedback).
-    const el = ballots.find((b) => b.election.id === electionId)?.election;
-    if (el) {
-      if (el.startTime && new Date(el.startTime as string).getTime() > now) {
-        setSubmitError("Voting for this election has not opened yet. Ballots open strictly at the scheduled time.");
-        return;
-      }
-      if (el.endTime && new Date(el.endTime as string).getTime() < now) {
-        setSubmitError("Voting for this election has closed. No ballots may be cast after the scheduled close time.");
-        return;
-      }
+    const section = ballots.find((b) => b.election.id === electionId);
+    if (!section) return;
+
+    // Strict window guard at submit time (rules also enforce this server-side).
+    const el = section.election;
+    if (el.startTime && new Date(el.startTime as string).getTime() > now) {
+      setSubmitError("Voting for this election has not opened yet. Ballots open strictly at the scheduled time.");
+      return;
+    }
+    if (el.endTime && new Date(el.endTime as string).getTime() < now) {
+      setSubmitError("Voting for this election has closed. No ballots may be cast after the scheduled close time.");
+      return;
     }
 
-    setSubmittingKey(key);
+    // Every position that still needs a vote must have exactly one selection.
+    const pendingPositions = section.positions.filter((p) => !section.votedPositions.has(p.id));
+    if (pendingPositions.length === 0) {
+      setSubmitError("You have already submitted your ballot for this election.");
+      return;
+    }
+    const votesByPosition: Record<string, string> = {};
+    const missing = pendingPositions.filter(
+      (p) => !selections[`${electionId}:${p.id}`]
+    );
+    if (missing.length > 0) {
+      setSubmitError(
+        `Please tick one candidate for every position before submitting. Missing: ${missing
+          .map((p) => p.title)
+          .join(", ")}`
+      );
+      return;
+    }
+    for (const p of pendingPositions) {
+      votesByPosition[p.id] = selections[`${electionId}:${p.id}`];
+    }
+
+    setSubmittingKey(electionId);
     setSubmitError(null);
     try {
-      const res = await voteService.submitVote(electionId, positionId, candidateId);
+      const res = await voteService.submitBallot(electionId, votesByPosition);
       if (res.error) {
         setSubmitError(res.error);
         return;
@@ -155,17 +172,15 @@ export default function VotePage() {
       setBallots((prev) =>
         prev.map((b) =>
           b.election.id === electionId
-            ? { ...b, votedPositions: new Set(b.votedPositions).add(positionId) }
+            ? {
+                ...b,
+                votedPositions: new Set([...b.votedPositions, ...pendingPositions.map((p) => p.id)]),
+              }
             : b
         )
       );
-      setSelections((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Failed to submit vote");
+      setSubmitError(err instanceof Error ? err.message : "Failed to submit ballot");
     } finally {
       setSubmittingKey(null);
     }
@@ -249,8 +264,9 @@ export default function VotePage() {
           <h1 className="text-4xl font-extrabold text-primary-900 tracking-tight">Official Voting Booth</h1>
           <p className="text-sm text-slate-600 mt-2">
             Your vote is confidential and securely recorded on the SUES electoral ledger.
-            Each voter casts <strong>one ballot per position</strong> — repeat attempts are
-            automatically rejected by the system.
+            Tick one candidate for <strong>every position</strong>, then confirm your{" "}
+            <strong>full ballot once</strong> — your votes are only recorded after you submit
+            the complete ballot.
           </p>
         </div>
 
@@ -475,24 +491,6 @@ export default function VotePage() {
                                   </label>
                                 ))}
                               </div>
-                              <div className="mt-4 flex justify-end">
-                                <Button
-                                  onClick={() => handleSubmitVote(b.election.id, position.id)}
-                                  disabled={!selected || submittingKey === key}
-                                >
-                                  {submittingKey === key ? (
-                                    <>
-                                      <Spinner className="text-white" size={16} />
-                                      Submitting...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <CheckSquare size={16} />
-                                      Confirm Selection
-                                    </>
-                                  )}
-                                </Button>
-                              </div>
                             </>
                           ) : (
                             <>
@@ -538,24 +536,6 @@ export default function VotePage() {
                                   </label>
                                 ))}
                               </div>
-                              <div className="mt-4 flex justify-end">
-                                <Button
-                                  onClick={() => handleSubmitVote(b.election.id, position.id)}
-                                  disabled={!selected || submittingKey === key}
-                                >
-                                  {submittingKey === key ? (
-                                    <>
-                                      <Spinner className="text-white" size={16} />
-                                      Submitting...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <CheckSquare size={16} />
-                                      Confirm Selection
-                                    </>
-                                  )}
-                                </Button>
-                              </div>
                             </>
                           )}
                         </Card>
@@ -564,6 +544,63 @@ export default function VotePage() {
                   );
                 })()
               }
+                {/* Single confirm for the whole election ballot */}
+                {(() => {
+                  const notStarted =
+                    b.election.startTime && new Date(b.election.startTime).getTime() > now;
+                  const closed =
+                    b.election.endTime && new Date(b.election.endTime).getTime() < now;
+                  if (b.eligible && b.positions.length > 0 && !notStarted && !closed) {
+                    const pendingCount = b.positions.filter((p) => !b.votedPositions.has(p.id)).length;
+                    const ready =
+                      b.positions.every(
+                        (p) => b.votedPositions.has(p.id) || selections[`${b.election.id}:${p.id}`]
+                      ) && pendingCount > 0;
+                    const submitting = submittingKey === b.election.id;
+                    const allDone = pendingCount === 0;
+                    return (
+                      <Card className="p-5 border-primary-900 bg-slate-50">
+                        {allDone ? (
+                          <div className="text-center">
+                            <Badge variant="success">
+                              <CheckCircle2 size={12} className="mr-1" />
+                              Ballot complete
+                            </Badge>
+                            <p className="text-sm text-slate-500 mt-1">
+                              You have submitted your ballot for every position in this election.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between flex-wrap gap-3">
+                            <p className="text-sm text-slate-600">
+                              {pendingCount} position{pendingCount > 1 ? "s" : ""} remaining.{" "}
+                              {ready
+                                ? "Your selections are ready to submit."
+                                : "Tick one candidate for every position to enable submission."}
+                            </p>
+                            <Button
+                              onClick={() => handleSubmitBallot(b.election.id)}
+                              disabled={!ready || submitting}
+                            >
+                              {submitting ? (
+                                <>
+                                  <Spinner className="text-white" size={16} />
+                                  Submitting ballot...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckSquare size={16} />
+                                  Submit My Ballot
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        )}
+                      </Card>
+                    );
+                  }
+                  return null;
+                })()}
                 </section>
               );
             })}

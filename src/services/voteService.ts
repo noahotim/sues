@@ -1,5 +1,5 @@
 import { db } from "../lib/firebase";
-import { collection, query, where, getDocs, onSnapshot, doc, setDoc, serverTimestamp, arrayUnion, getDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, onSnapshot, doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { auditService } from "./auditService";
 
@@ -38,19 +38,24 @@ export const voteService = {
    *  3. Turnout flag   - best-effort update of the voter's own roster row for
    *     dashboards (cosmetic; integrity lives in steps 1-2).
    */
-  submitVote: async (electionId: string, positionId: string, candidateId: string) => {
+  /**
+   * Record a COMPLETE ballot - every position in an election - in a single
+   * confirmation. votesByPosition maps each positionId to the chosen candidate.
+   *
+   * Steps per position (atomic once-only):
+   *   1. claim vote_receipts/{email}__{election}__{position}   (deterministic id)
+   *   2. create votes/{nonce} (anonymous ballot)
+   * Positions the voter already completed are skipped and not re-counted.
+   * Only when EVERY position is cast is the voter marked fully voted (hasVoted).
+   */
+  submitBallot: async (electionId: string, votesByPosition: Record<string, string>) => {
     try {
       const user = getAuth().currentUser;
       if (!user || !user.email) return { error: "You must be signed in to vote." };
       const email = user.email.toLowerCase();
 
-      const receiptRef = doc(db, "vote_receipts", `${email}__${electionId}__${positionId}`);
-
-      // Friendly early check (rules still enforce it atomically).
-      const existing = await getDoc(receiptRef).catch(() => null);
-      if (existing && existing.exists()) {
-        return { error: "You have already voted for this position." };
-      }
+      const positionIds = Object.keys(votesByPosition).filter((p) => votesByPosition[p]);
+      if (positionIds.length === 0) return { error: "Select a candidate for each position before submitting." };
 
       // Pre-flight checks in parallel so voters get precise feedback instead of
       // a generic permission error. The atomic rules remain the final authority.
@@ -83,65 +88,73 @@ export const voteService = {
         return { error: "You are not registered as an eligible voter for this election." };
       }
 
-      const nonce = makeNonce();
+      // Total positions in this election determines "ballot complete".
+      const posSnap = await getDocs(
+        query(collection(db, "positions"), where("electionId", "==", electionId))
+      );
+      const totalPositions = posSnap.docs.length;
 
-      // 1. Claim the ballot (atomic once-only lock).
-      try {
-        await setDoc(receiptRef, {
-          voterEmail: email,
-          electionId,
-          positionId,
-          nonce,
-          createdAt: serverTimestamp(),
-        });
-      } catch (err: any) {
-        if (String(err?.code) === "already-exists") {
-          return { error: "You have already voted for this position." };
+      let recorded = 0;
+      let already = 0;
+      let failed: string | null = null;
+      const recordedPositions: string[] = [];
+
+      for (const positionId of positionIds) {
+        const candidateId = votesByPosition[positionId];
+        const receiptRef = doc(db, "vote_receipts", `${email}__${electionId}__${positionId}`);
+
+        // 1. Claim the ballot (atomic once-only lock).
+        const nonce = makeNonce();
+        try {
+          await setDoc(receiptRef, {
+            voterEmail: email,
+            electionId,
+            positionId,
+            nonce,
+            createdAt: serverTimestamp(),
+          });
+        } catch (err: any) {
+          if (String(err?.code) === "already-exists") {
+            already++; // already voted this position earlier
+            continue;
+          }
+          failed = `One or more votes could not be recorded. Contact the election administrator.`;
+          break;
         }
-        return {
-          error:
-            "Your vote could not be recorded. Please confirm you are on this election's voter roster and that voting is open.",
-        };
+
+        // 2. Record the anonymous ballot.
+        try {
+          await setDoc(doc(db, "votes", nonce), {
+            electionId,
+            positionId,
+            candidateId,
+            createdAt: serverTimestamp(),
+          });
+        } catch {
+          failed = "Ballot accepted but recording failed. Contact the election administrator.";
+          break;
+        }
+
+        // 3. Anonymous audit trail (never identifies the voter).
+        auditService.log("CAST_VOTE", "vote", candidateId, { electionId, positionId });
+        recorded++;
+        recordedPositions.push(positionId);
       }
 
-      // 2. Record the anonymous ballot.
+      // 4. Turnout bookkeeping (never blocks the vote). The voter counts as
+      // fully "voted" only once EVERY position in this election is cast.
       try {
-        await setDoc(doc(db, "votes", nonce), {
-          electionId,
-          positionId,
-          candidateId,
-          createdAt: serverTimestamp(),
-        });
-      } catch (err: any) {
-        // Receipt exists without a ballot: surface clearly instead of losing it.
-        return { error: "Ballot accepted but recording failed. Contact the election administrator." };
-      }
-
-      // 3. Anonymous audit trail (never identifies the voter).
-      auditService.log("CAST_VOTE", "vote", candidateId, { electionId, positionId });
-
-      // 4. Turnout bookkeeping (never blocks the vote).
-      // A voter is only counted as fully "voted" once they have cast a ballot
-      // for EVERY position in the election. Partial ballots keep the voter's
-      // hasVoted flag at false; it flips to true only on the final position.
-      try {
-        const posSnap = await getDocs(
-          query(collection(db, "positions"), where("electionId", "==", electionId))
-        );
-        const totalPositions = posSnap.docs.length;
         const rosterRef = doc(db, "voter_roster", `voter_${electionId}_${email}`);
         const rosterSnap = await getDoc(rosterRef);
         const prevVoted: string[] = Array.isArray(rosterSnap.data()?.votedPositions)
           ? rosterSnap.data()!.votedPositions
           : [];
-        const votedNow = new Set([...prevVoted, positionId]);
-
-        const allVoted = totalPositions > 0 && votedNow.size >= totalPositions;
+        const votedNow = Array.from(new Set([...prevVoted, ...recordedPositions]));
+        const allVoted = totalPositions > 0 && votedNow.length >= totalPositions;
 
         const patch: Record<string, unknown> = {
-          votedPositions: arrayUnion(positionId),
-          // Only write hasVoted when the full ballot is complete, so a partial
-          // submission never falsely marks the voter as done.
+          votedPositions: votedNow,
+          // Only write hasVoted when the full ballot is complete.
           ...(allVoted ? { hasVoted: true } : {}),
         };
         await setDoc(rosterRef, patch, { merge: true });
@@ -149,10 +162,19 @@ export const voteService = {
         /* dashboard flag only */
       }
 
+      if (failed) return { error: failed };
+      if (recorded === 0 && already > 0) {
+        return { error: "You have already voted in this election." };
+      }
       return { error: null };
     } catch (err: any) {
       return { error: err?.message || "Failed to submit vote" };
     }
+  },
+
+  /** Single-position convenience wrapper for the full-ballot submit. */
+  submitVote: async (electionId: string, positionId: string, candidateId: string) => {
+    return voteService.submitBallot(electionId, { [positionId]: candidateId });
   },
 
   subscribeToVotes: (electionId: string, callback: (data: Vote[]) => void) => {
