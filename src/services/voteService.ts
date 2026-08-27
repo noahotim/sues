@@ -121,12 +121,30 @@ export const voteService = {
       auditService.log("CAST_VOTE", "vote", candidateId, { electionId, positionId });
 
       // 4. Turnout bookkeeping (never blocks the vote).
+      // A voter is only counted as fully "voted" once they have cast a ballot
+      // for EVERY position in the election. Partial ballots keep the voter's
+      // hasVoted flag at false; it flips to true only on the final position.
       try {
-        await setDoc(
-          doc(db, "voter_roster", `voter_${electionId}_${email}`),
-          { hasVoted: true, votedPositions: arrayUnion(positionId) },
-          { merge: true }
+        const posSnap = await getDocs(
+          query(collection(db, "positions"), where("electionId", "==", electionId))
         );
+        const totalPositions = posSnap.docs.length;
+        const rosterRef = doc(db, "voter_roster", `voter_${electionId}_${email}`);
+        const rosterSnap = await getDoc(rosterRef);
+        const prevVoted: string[] = Array.isArray(rosterSnap.data()?.votedPositions)
+          ? rosterSnap.data()!.votedPositions
+          : [];
+        const votedNow = new Set([...prevVoted, positionId]);
+
+        const allVoted = totalPositions > 0 && votedNow.size >= totalPositions;
+
+        const patch: Record<string, unknown> = {
+          votedPositions: arrayUnion(positionId),
+          // Only write hasVoted when the full ballot is complete, so a partial
+          // submission never falsely marks the voter as done.
+          ...(allVoted ? { hasVoted: true } : {}),
+        };
+        await setDoc(rosterRef, patch, { merge: true });
       } catch {
         /* dashboard flag only */
       }

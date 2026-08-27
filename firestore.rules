@@ -119,9 +119,13 @@ service cloud.firestore {
         || (isSignedIn()
             && resource.data.voterEmail == userEmail()
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hasVoted', 'votedPositions'])
-            && request.resource.data.hasVoted == true
             && request.resource.data.votedPositions.hasAll(resource.data.votedPositions)
-            && request.resource.data.votedPositions.size() > resource.data.votedPositions.size());
+            && request.resource.data.votedPositions.size() > resource.data.votedPositions.size()
+            // A voter may only ever (a) grow their votedPositions, and (b) mark
+            // themselves FULLY voted once every position is done. They must never
+            // unwrite hasVoted. Partial ballots grow votedPositions only.
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['hasVoted'])
+                || request.resource.data.hasVoted == true));
       allow create, delete: if isElectionManager();
     }
 
