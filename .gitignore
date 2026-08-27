@@ -20,3 +20,4 @@ fb-login.log
 functions/lib/
 scripts/fb-*.cjs
 scripts/diag-*.cjs
+.vercel

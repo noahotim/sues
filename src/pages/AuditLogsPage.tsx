@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { ScrollText } from "lucide-react";
 import { auditService, type AuditLog } from "../services";
 import {
@@ -14,22 +14,15 @@ export default function AuditLogsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(false);
-    try {
-      const { data } = await auditService.getAuditLogs();
-      if (data) setLogs(data);
-    } catch {
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // Realtime: entries appear the moment an operation happens (no refresh).
   useEffect(() => {
-    load();
-  }, [load]);
+    const unsub = auditService.subscribeToAuditLogs((data) => {
+      setLogs(data);
+      setLoading(false);
+      setError(false);
+    });
+    return () => unsub();
+  }, []);
 
   function formatAction(action: string): string {
     return action
@@ -41,11 +34,11 @@ export default function AuditLogsPage() {
 
   function formatTime(ts: string): string {
     const date = new Date(ts);
-    return date.toLocaleString();
+    return isNaN(date.getTime()) ? ts : date.toLocaleString();
   }
 
   if (loading) return <LoadingState message="Loading audit logs..." />;
-  if (error) return <ErrorState message="We could not load the audit logs." onRetry={load} />;
+  if (error) return <ErrorState message="We could not load the audit logs." onRetry={() => window.location.reload()} />;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -84,7 +77,9 @@ export default function AuditLogsPage() {
                     <td className="px-4 py-3 text-slate-500 whitespace-nowrap text-xs">
                       {formatTime(log.createdAt)}
                     </td>
-                    <td className="px-4 py-3 text-slate-700 font-medium">{log.userEmail || "—"}</td>
+                    <td className="px-4 py-3 text-slate-700 font-medium">
+                      {log.actorEmail || log.userEmail || (log.action === "CAST_VOTE" ? "Anonymous" : "—")}
+                    </td>
                     <td className="px-4 py-3">
                       <Badge variant="primary">{formatAction(log.action)}</Badge>
                     </td>

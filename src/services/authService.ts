@@ -2,6 +2,7 @@ import { auth, db, functions } from "../lib/firebase";
 import { collection, doc, getDocs, getDoc, setDoc, updateDoc, serverTimestamp, query, where } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { auditService } from "./auditService";
 
 export interface UserProfile {
   id: string;
@@ -214,6 +215,7 @@ export const authService = {
           updatedAt: serverTimestamp(),
         });
       }
+      auditService.log("USER_ROLE_UPDATED", "user", targetUid, { targetRole });
       return { error: null };
     } catch (error: any) {
       return { error: error.message };

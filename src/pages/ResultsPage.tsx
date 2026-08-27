@@ -130,6 +130,162 @@ export default function ResultsPage() {
   if (error) return <ErrorState message="We could not load the results." onRetry={load} />;
 
   const selectedElection = elections.find((e) => e.id === selectedElectionId);
+  const isElectionOver =
+    !!selectedElection &&
+    (selectedElection.status === "closed" ||
+      selectedElection.status === "published" ||
+      (selectedElection.endTime && new Date(selectedElection.endTime).getTime() < Date.now()));
+
+  /** Uganda EC-style Declaration of Results form. */
+  async function downloadDeclarationForm() {
+    if (!selectedElection) return;
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ format: "a4" });
+    const W = doc.internal.pageSize.getWidth();
+    const M = 16;
+    let y = 0;
+
+    const box = (h: number) => {
+      doc.setDrawColor(15, 23, 42);
+      doc.setLineWidth(0.6);
+      doc.rect(M, y, W - M * 2, h);
+    };
+
+    // Header
+    doc.setFont("times", "bold");
+    doc.setFontSize(22);
+    doc.setTextColor(20, 20, 20);
+    doc.text("REPUBLIC OF UGANDA", W / 2, y + 14, { align: "center" });
+    doc.setFontSize(18);
+    doc.text("ELECTORAL COMMISSION", W / 2, y + 23, { align: "center" });
+    doc.setFontSize(12);
+    doc.setTextColor(60);
+    doc.text("DECLARATION OF RESULTS FORM", W / 2, y + 31, { align: "center" });
+    doc.setTextColor(0);
+    y += 36;
+
+    // Election details box
+    box(24);
+    doc.setFontSize(11);
+    doc.text(`Election: ${selectedElection.title}`, M + 4, y + 8);
+    if (selectedElection.startTime)
+      doc.text(`Poll opened: ${new Date(selectedElection.startTime).toLocaleString()}`, M + 4, y + 15);
+    if (selectedElection.endTime)
+      doc.text(`Poll closed: ${new Date(selectedElection.endTime).toLocaleString()}`, M + 4, y + 21);
+    y += 28;
+
+    // Declared/winner summary
+    const winners = positionResults
+      .filter((pr) => pr.results.length > 0 && (pr.unopposed ? pr.affirmed : pr.results[0].votes > 0))
+      .map((pr) => {
+        const winner = pr.results[0];
+        return `${pr.position.title}: ${winner.candidate.name} (${winner.votes} vote${winner.votes !== 1 ? "s" : ""}${pr.unopposed ? ", affirmed" : ""})`;
+      });
+
+    box(winners.length * 7 + 14);
+    doc.setFont("times", "bold");
+    doc.setFontSize(12);
+    doc.text("CANDIDATES DECLARED ELECTED", M + 4, y + 8);
+    doc.setFont("times", "normal");
+    doc.setFontSize(10);
+    if (winners.length) {
+      winners.forEach((w, i) => doc.text(w, M + 8, y + 15 + i * 7));
+    } else {
+      doc.text("(No position has met the required threshold yet.)", M + 8, y + 15);
+    }
+    y += winners.length * 7 + 14 + 8;
+
+    // Per-position declaration tables
+    for (const pr of positionResults) {
+      if (y > doc.internal.pageSize.getHeight() - 90) { doc.addPage(); y = M; }
+      doc.setFont("times", "bold");
+      doc.setFontSize(13);
+      doc.text(`DECLARATION OF RESULTS - ${pr.position.title}`, M, y + 2);
+      y += 7;
+
+      // header row
+      doc.setDrawColor(15, 23, 42);
+      doc.setLineWidth(0.5);
+      doc.rect(M, y, W - M * 2, 8);
+      doc.setFontSize(10);
+      doc.text("Candidate", M + 3, y + 6);
+      doc.text("Votes obtained", W - M - 3, y + 6, { align: "right" });
+      doc.text("%", M + 70, y + 6);
+      y += 8;
+
+      let rows = pr.results.length || 1;
+      if (y + rows * 8 > doc.internal.pageSize.getHeight() - 70) { doc.addPage(); y = M; }
+      for (let i = 0; i < rows; i++) {
+        const r = pr.results[i];
+        doc.rect(M, y, W - M * 2, 8);
+        doc.setFontSize(10);
+        doc.text(r ? r.candidate.name : "No candidates", M + 3, y + 6);
+        doc.text(r ? String(r.votes) : "0", W - M - 3, y + 6, { align: "right" });
+        doc.text(r ? `${r.percentage}%` : "0%", M + 70, y + 6);
+        y += 8;
+      }
+
+      // winner line
+      const w = pr.unopposed
+        ? pr.affirmed
+          ? "AFFIRMED (unopposed, >= 51%)"
+          : "NOT AFFIRMED (unopposed, below 51%)"
+        : pr.results[0] && pr.results[0].votes > 0
+          ? `${pr.results[0].candidate.name} DECLARED ELECTED`
+          : "No winner yet";
+      doc.setFont("times", "bold");
+      doc.setFontSize(10.5);
+      doc.text(`Declared: ${w}`, M, y + 6);
+      doc.setFont("times", "normal");
+      y += 12;
+    }
+
+    // Totals
+    if (y > doc.internal.pageSize.getHeight() - 90) { doc.addPage(); y = M; }
+    const totalVotes = Object.values(voteCounts).reduce((s, v) => s + v, 0);
+    box(34);
+    doc.setFont("times", "bold");
+    doc.setFontSize(11);
+    doc.text("SUMMARY OF RETURNS", M + 4, y + 7);
+    doc.setFont("times", "normal");
+    doc.setFontSize(10);
+    doc.text(`Total valid votes cast: ${totalVotes}`, M + 4, y + 14);
+    doc.text(`Eligible voters: ${roster.length}`, M + 4, y + 20);
+    doc.text(`Turnout: ${turnoutPercentage}%`, M + 4, y + 26);
+    doc.text("Invalid/rejected ballots: N/A (system records only valid votes)", M + 4, y + 31);
+    y += 38;
+
+    // Declaration paragraph + signatures
+    if (y > doc.internal.pageSize.getHeight() - 80) { doc.addPage(); y = M; }
+    doc.setFontSize(10);
+    doc.text(
+      "I, the Returning Officer, hereby certify that the results shown on this form are a true and",
+      M,
+      y
+    );
+    doc.text(
+      "accurate record of the votes cast and counted, and I declare them accordingly.",
+      M,
+      y + 6
+    );
+    y += 16;
+    const sigW = (W - M * 2 - 12) / 2;
+    const sig = (x: number, label: string) => {
+      doc.setLineWidth(0.4);
+      doc.line(x, y + 28, x + sigW, y + 28);
+      doc.text(label, x, y + 34);
+    };
+    sig(M, "Returning Officer");
+    sig(M + sigW + 12, "Candidate / Representative");
+    y += 44;
+    sig(M, "Observer 1");
+    sig(M + sigW + 12, "Observer 2");
+    y += 40;
+    doc.setFontSize(10);
+    doc.text(`Signed/declared this ${new Date().toLocaleString()}`, M, y);
+
+    doc.save(`Declaration-Of-Results-${selectedElection.title.replace(/[^a-z0-9]+/gi, "-")}.pdf`);
+  }
 
   async function downloadPdf() {
     if (!selectedElection) return;
@@ -280,12 +436,38 @@ export default function ResultsPage() {
           </div>
         </div>
         {selectedElection && positionResults.length > 0 && (
-          <Button onClick={downloadPdf}>
-            <FileDown size={18} />
-            Download PDF
-          </Button>
+          <div className="flex flex-col items-end gap-2">
+            {isElectionOver && (
+              <Button onClick={downloadDeclarationForm} className="!bg-success-600 hover:!bg-success-700">
+                <FileDown size={18} />
+                Declaration of Results
+              </Button>
+            )}
+            <Button onClick={downloadPdf} variant={isElectionOver ? "secondary" : undefined}>
+              <FileDown size={18} />
+              Download Report
+            </Button>
+          </div>
         )}
       </div>
+
+      {isElectionOver && selectedElection && (
+        <Card className="p-5 bg-success-50 border-success-200">
+          <div className="flex items-start gap-3">
+            <Trophy size={22} className="text-success-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-success-800">
+                Polls have closed — results are now official.
+              </p>
+              <p className="text-xs text-success-700 mt-1">
+                The system has automatically tallied the final results. Download the{" "}
+                <strong>Declaration of Results</strong> form (Uganda Electoral Commission format)
+                to certify the winning candidates.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {elections.length > 0 && (
         <Select

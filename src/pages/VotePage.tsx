@@ -291,16 +291,53 @@ export default function VotePage() {
                         </div>
                       </div>
                     </Card>
-                  ) : b.positions.length === 0 ? (
-                    <Card className="p-5">
-                      <EmptyState
-                        icon={<CheckSquare size={40} />}
-                        title="No positions to vote on"
-                        message="This election has no configured positions yet."
-                      />
-                    </Card>
-                  ) : (
-                    b.positions.map((position, idx) => {
+                  ) : (() => {
+                    const now = Date.now();
+                    const notStarted = b.election.startTime && new Date(b.election.startTime).getTime() > now;
+                    const closed = b.election.endTime && new Date(b.election.endTime).getTime() < now;
+                    if (notStarted) {
+                      return (
+                        <Card className="p-5 border-warning-200 bg-warning-50">
+                          <div className="flex items-start gap-3">
+                            <Clock size={20} className="text-warning-600 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium text-warning-700">Polls have not opened yet</p>
+                              <p className="text-xs text-warning-600 mt-1">
+                                Voting for this election opens at{" "}
+                                <strong>{new Date(b.election.startTime!).toLocaleString()}</strong>.
+                                No ballots can be cast before then.
+                              </p>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    }
+                    if (closed) {
+                      return (
+                        <Card className="p-5 border-slate-300 bg-slate-100">
+                          <div className="flex items-start gap-3">
+                            <Clock size={20} className="text-slate-500 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium text-slate-700">Polls have closed</p>
+                              <p className="text-xs text-slate-600 mt-1">
+                                Voting ended at <strong>{new Date(b.election.endTime!).toLocaleString()}</strong>.
+                                Ballots can no longer be cast.
+                              </p>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    }
+                    return b.positions.length === 0 ? (
+                      <Card className="p-5">
+                        <EmptyState
+                          icon={<CheckSquare size={40} />}
+                          title="No positions to vote on"
+                          message="This election has no configured positions yet."
+                        />
+                      </Card>
+                    ) : (
+                      b.positions.map((position, idx) => {
                       const positionCandidates = b.candidates.filter((c) => c.positionId === position.id);
                       const hasVoted = b.votedPositions.has(position.id);
                       const key = `${b.election.id}:${position.id}`;
@@ -475,7 +512,9 @@ export default function VotePage() {
                         </Card>
                       );
                     })
-                  )}
+                  );
+                })()
+              }
                 </section>
               );
             })}

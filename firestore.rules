@@ -164,10 +164,20 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // ---------- Audit logs ----------
+    // ---------- Audit logs (realtime - written by the app as events happen) ---
     match /audit_logs/{logId} {
       allow read: if isChairperson();
-      allow write: if false;
+      // The app appends entries itself. CAST_VOTE is anonymous (ballot secrecy);
+      // every other action must identify the acting user.
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['action', 'entityType', 'entityId', 'details', 'createdAt', 'actorEmail'])
+        && request.resource.data.action in ['CAST_VOTE', 'ELECTION_CREATED', 'ELECTION_UPDATED',
+             'ELECTION_DELETED', 'POSITION_CREATED', 'POSITION_UPDATED', 'POSITION_DELETED',
+             'CANDIDATE_CREATED', 'CANDIDATE_UPDATED', 'CANDIDATE_DELETED',
+             'ROSTER_IMPORTED', 'VOTER_ADDED', 'VOTER_REMOVED', 'USER_ROLE_UPDATED']
+        && (request.resource.data.action == 'CAST_VOTE'
+            || request.resource.data.actorEmail == userEmail());
+      allow update, delete: if false;
     }
 
     // ---------- Allowed-voter register (system-wide) ----------

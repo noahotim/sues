@@ -1,6 +1,7 @@
 import { db } from "../lib/firebase";
 import { collection, query, where, getDocs, onSnapshot, doc, setDoc, serverTimestamp, arrayUnion, getDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
+import { auditService } from "./auditService";
 
 export interface Vote {
   id: string;
@@ -105,7 +106,10 @@ export const voteService = {
         return { error: "Ballot accepted but recording failed. Contact the election administrator." };
       }
 
-      // 3. Turnout bookkeeping (never blocks the vote).
+      // 3. Anonymous audit trail (never identifies the voter).
+      auditService.log("CAST_VOTE", "vote", candidateId, { electionId, positionId });
+
+      // 4. Turnout bookkeeping (never blocks the vote).
       try {
         await setDoc(
           doc(db, "voter_roster", `voter_${electionId}_${email}`),

@@ -1,5 +1,6 @@
 import { db } from "../lib/firebase";
 import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { auditService } from "./auditService";
 
 export interface VoterRosterEntry {
   id: string;
@@ -56,6 +57,7 @@ export const rosterService = {
         { email: voterEmail, role: "VOTER", addedAt: serverTimestamp() },
         { merge: true }
       );
+      auditService.log("VOTER_ADDED", "voter", voterEmail, { electionId: data.electionId });
       return { data: { id, ...fullData }, error: null };
     } catch (error: any) {
       return { data: null, error: error.message };
@@ -65,6 +67,7 @@ export const rosterService = {
   removeVoter: async (id: string) => {
     try {
       await deleteDoc(doc(db, "voter_roster", id));
+      auditService.log("VOTER_REMOVED", "voter", id);
       return { error: null };
     } catch (error: any) {
       return { error: error.message };
@@ -175,6 +178,7 @@ export const rosterService = {
         );
         inserted++;
       }
+      auditService.log("ROSTER_IMPORTED", "roster", electionId, { inserted, skipped });
       return { data: { success: true, inserted, skipped }, error: null };
     } catch (error: any) {
       return { data: null, error: error.message };

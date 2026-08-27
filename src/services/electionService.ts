@@ -1,5 +1,6 @@
 import { db } from "../lib/firebase";
 import { collection, doc, getDocs, setDoc, updateDoc, deleteDoc, query, orderBy, where, onSnapshot, Timestamp } from "firebase/firestore";
+import { auditService } from "./auditService";
 
 export interface Election {
   id: string;
@@ -82,6 +83,7 @@ export const electionService = {
     try {
       const newDocRef = doc(collection(db, "elections"));
       await setDoc(newDocRef, { ...data, startTime: toTs(data.startTime), endTime: toTs(data.endTime) });
+      auditService.log("ELECTION_CREATED", "election", newDocRef.id, { title: data.title, status: data.status });
       return { data: { id: newDocRef.id, ...data }, error: null };
     } catch (error: any) {
       return { data: null, error: error.message };
@@ -95,6 +97,7 @@ export const electionService = {
         startTime: toTs(data.startTime),
         endTime: toTs(data.endTime),
       });
+      auditService.log("ELECTION_UPDATED", "election", id, { title: data.title, status: data.status });
       return { error: null };
     } catch (error: any) {
       return { error: error.message };
@@ -104,6 +107,7 @@ export const electionService = {
   deleteElection: async (id: string) => {
     try {
       await deleteDoc(doc(db, "elections", id));
+      auditService.log("ELECTION_DELETED", "election", id);
       return { error: null };
     } catch (error: any) {
       return { error: error.message };
@@ -114,6 +118,7 @@ export const electionService = {
     try {
       const newDocRef = doc(collection(db, "positions"));
       await setDoc(newDocRef, data);
+      auditService.log("POSITION_CREATED", "position", newDocRef.id, { electionId: data.electionId, title: data.title });
       return { data: { id: newDocRef.id, ...data }, error: null };
     } catch (error: any) {
       return { data: null, error: error.message };
@@ -123,6 +128,7 @@ export const electionService = {
   updatePosition: async (id: string, data: Partial<Position>) => {
     try {
       await updateDoc(doc(db, "positions", id), data);
+      auditService.log("POSITION_UPDATED", "position", id, { title: data.title });
       return { error: null };
     } catch (error: any) {
       return { error: error.message };
@@ -132,6 +138,7 @@ export const electionService = {
   deletePosition: async (id: string) => {
     try {
       await deleteDoc(doc(db, "positions", id));
+      auditService.log("POSITION_DELETED", "position", id);
       return { error: null };
     } catch (error: any) {
       return { error: error.message };

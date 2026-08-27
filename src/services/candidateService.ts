@@ -1,5 +1,6 @@
 import { db } from "../lib/firebase";
 import { collection, doc, getDocs, setDoc, updateDoc, deleteDoc, query, where, onSnapshot } from "firebase/firestore";
+import { auditService } from "./auditService";
 
 export interface Candidate {
   id: string;
@@ -70,6 +71,7 @@ export const candidateService = {
     try {
       const newDocRef = doc(collection(db, "candidates"));
       await setDoc(newDocRef, data);
+      auditService.log("CANDIDATE_CREATED", "candidate", newDocRef.id, { electionId: data.electionId, name: data.name });
       return { data: { id: newDocRef.id, ...data }, error: null };
     } catch (error: any) {
       return { data: null, error: error.message };
@@ -79,6 +81,7 @@ export const candidateService = {
   updateCandidate: async (id: string, data: Partial<Candidate>) => {
     try {
       await updateDoc(doc(db, "candidates", id), data);
+      auditService.log("CANDIDATE_UPDATED", "candidate", id, { name: data.name });
       return { error: null };
     } catch (error: any) {
       return { error: error.message };
@@ -88,6 +91,7 @@ export const candidateService = {
   deleteCandidate: async (id: string) => {
     try {
       await deleteDoc(doc(db, "candidates", id));
+      auditService.log("CANDIDATE_DELETED", "candidate", id);
       return { error: null };
     } catch (error: any) {
       return { error: error.message };
