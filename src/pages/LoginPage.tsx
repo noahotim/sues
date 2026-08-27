@@ -96,6 +96,26 @@ export default function LoginPage() {
               </li>
             </ul>
           </details>
+
+          {/* Technical support */}
+          <div className="border-t border-slate-200 pt-4">
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
+              Technical difficulties?
+            </p>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Contact us on WhatsApp before the polls close:
+            </p>
+            <ul className="mt-2 space-y-1.5 text-xs text-slate-700">
+              <li className="flex items-start gap-2">
+                <span className="font-medium text-primary-900 shrink-0">Arikod Charles</span>
+                <span className="text-slate-500">— Chairperson, Electoral Commission · +256 700 837339</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="font-medium text-primary-900 shrink-0">Abel Ea</span>
+                <span className="text-slate-500">— Outgoing President · +256 784 014317</span>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

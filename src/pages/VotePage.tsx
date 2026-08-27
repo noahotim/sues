@@ -423,9 +423,22 @@ export default function VotePage() {
             )}
 
             {/* Clock info */}
-            <div className="flex items-center justify-center gap-2 text-xs text-slate-400 pb-10">
+            <div className="flex items-center justify-center gap-2 text-xs text-slate-400 pb-6">
               <Clock size={14} />
               Polls follow each election's official opening and closing times.
+            </div>
+
+            {/* Technical support */}
+            <div className="border-t border-slate-200 pt-5 pb-10 text-center">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
+                Having trouble voting?
+              </p>
+              <p className="text-xs text-slate-600">
+                WhatsApp <span className="font-medium text-primary-900">Arikod Charles</span>
+                <span className="text-slate-500"> (Electoral Commission) +256 700 837339</span> or
+                <span className="font-medium text-primary-900"> Abel Ea</span>
+                <span className="text-slate-500"> (Outgoing President) +256 784 014317</span>.
+              </p>
             </div>
           </>
         )}

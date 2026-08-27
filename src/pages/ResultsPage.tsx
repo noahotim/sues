@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from "react";
-import { jsPDF } from "jspdf";
 import { BarChart3, Trophy, FileDown } from "lucide-react";
 import {
   electionService,
@@ -124,6 +123,8 @@ export default function ResultsPage() {
 
   async function downloadPdf() {
     if (!selectedElection) return;
+    // Load the PDF library on demand so it never slows the initial page load.
+    const { jsPDF } = await import("jspdf");
     const doc = new jsPDF();
     const margin = 18;
     const width = doc.internal.pageSize.getWidth();

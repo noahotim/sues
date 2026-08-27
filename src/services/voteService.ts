@@ -51,9 +51,13 @@ export const voteService = {
         return { error: "You have already voted for this position." };
       }
 
-      // Pre-flight checks so voters get precise feedback instead of a generic
-      // permission error. The atomic rules remain the final authority.
-      const elSnap = await getDoc(doc(db, "elections", electionId)).catch(() => null);
+      // Pre-flight checks in parallel so voters get precise feedback instead of
+      // a generic permission error. The atomic rules remain the final authority.
+      const [elSnap, regSnap, rosterSnap] = await Promise.all([
+        getDoc(doc(db, "elections", electionId)).catch(() => null),
+        getDoc(doc(db, "eligible_emails", email)).catch(() => null),
+        getDoc(doc(db, "voter_roster", `voter_${electionId}_${email}`)).catch(() => null),
+      ]);
       if (elSnap && elSnap.exists()) {
         const el = elSnap.data();
         if (el.status !== "active") return { error: "This election is not currently open for voting." };
@@ -63,9 +67,6 @@ export const voteService = {
         if (el.endTime && new Date(el.endTime).getTime() < now)
           return { error: "Voting for this election has closed." };
       }
-
-      const regSnap = await getDoc(doc(db, "eligible_emails", email)).catch(() => null);
-      const rosterSnap = await getDoc(doc(db, "voter_roster", `voter_${electionId}_${email}`)).catch(() => null);
       if (!regSnap?.exists() && !rosterSnap?.exists()) {
         return { error: "You are not registered as an eligible voter for this election." };
       }
