@@ -63,9 +63,20 @@ export const voteService = {
         const el = elSnap.data();
         if (el.status !== "active") return { error: "This election is not currently open for voting." };
         const now = Date.now();
-        if (el.startTime && new Date(el.startTime).getTime() > now)
+        // Firestore returns these as Timestamp instances (or strings after the
+        // production backfill). Normalize both to an epoch millis for a strict
+        // wall-clock comparison against the client clock.
+        const toEpoch = (v: any): number | null => {
+          if (!v) return null;
+          if (typeof v.toDate === "function") return v.toDate().getTime();
+          const d = new Date(v);
+          return isNaN(d.getTime()) ? null : d.getTime();
+        };
+        const startMs = toEpoch(el.startTime);
+        const endMs = toEpoch(el.endTime);
+        if (startMs != null && startMs > now)
           return { error: "Voting for this election has not opened yet." };
-        if (el.endTime && new Date(el.endTime).getTime() < now)
+        if (endMs != null && endMs < now)
           return { error: "Voting for this election has closed." };
       }
       if (!regSnap?.exists() && !rosterSnap?.exists()) {

@@ -39,8 +39,17 @@ export default function VotePage() {
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Live clock: re-evaluated every second so polls open/close STRICTLY at the
+  // configured time, even if a voter leaves this page open across the boundary
+  // (a static load-time check would otherwise never flip).
+  const [now, setNow] = useState(Date.now());
 
   const canVote = permissions.includes("VOTE");
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !session) {
@@ -119,6 +128,21 @@ export default function VotePage() {
     const key = `${electionId}:${positionId}`;
     const candidateId = selections[key];
     if (!candidateId) return;
+
+    // Strict window guard at submit time: never let a ballot through outside
+    // the election's official opening/closing times (rules also enforce this
+    // server-side, so this is defence-in-depth for immediate feedback).
+    const el = ballots.find((b) => b.election.id === electionId)?.election;
+    if (el) {
+      if (el.startTime && new Date(el.startTime as string).getTime() > now) {
+        setSubmitError("Voting for this election has not opened yet. Ballots open strictly at the scheduled time.");
+        return;
+      }
+      if (el.endTime && new Date(el.endTime as string).getTime() < now) {
+        setSubmitError("Voting for this election has closed. No ballots may be cast after the scheduled close time.");
+        return;
+      }
+    }
 
     setSubmittingKey(key);
     setSubmitError(null);
@@ -301,10 +325,16 @@ export default function VotePage() {
                       </div>
                     </Card>
                   ) : (() => {
-                    const now = Date.now();
                     const notStarted = b.election.startTime && new Date(b.election.startTime).getTime() > now;
                     const closed = b.election.endTime && new Date(b.election.endTime).getTime() < now;
                     if (notStarted) {
+                      const startMs = new Date(b.election.startTime!).getTime();
+                      const msLeft = Math.max(0, startMs - now);
+                      const days = Math.floor(msLeft / 86400000);
+                      const hours = Math.floor((msLeft % 86400000) / 3600000);
+                      const minutes = Math.floor((msLeft % 3600000) / 60000);
+                      const seconds = Math.floor((msLeft % 60000) / 1000);
+                      const cd = [days ? `${days}d ` : "", `${hours}h `, `${minutes}m `, `${seconds}s`].join("").trim();
                       return (
                         <Card className="p-5 border-warning-200 bg-warning-50">
                           <div className="flex items-start gap-3">
@@ -313,8 +343,11 @@ export default function VotePage() {
                               <p className="text-sm font-medium text-warning-700">Polls have not opened yet</p>
                               <p className="text-xs text-warning-600 mt-1">
                                 Voting for this election opens at{" "}
-                                <strong>{new Date(b.election.startTime!).toLocaleString()}</strong>.
-                                No ballots can be cast before then.
+                                <strong>{new Date(b.election.startTime!).toLocaleString()}</strong>. No
+                                ballots can be cast before then.
+                              </p>
+                              <p className="text-xs font-semibold text-warning-800 mt-2">
+                                Countdown to opening: {cd}
                               </p>
                             </div>
                           </div>
