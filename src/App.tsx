@@ -28,6 +28,9 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/vote" element={<VotePage />} />
+            {/* Public results — any authenticated user (including voters) can
+                view results of closed/published elections. */}
+            <Route path="/results" element={<ResultsPage />} />
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="/admin/dashboard" replace />} />
               <Route

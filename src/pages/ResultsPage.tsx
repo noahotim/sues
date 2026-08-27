@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
-import { BarChart3, Trophy, FileDown } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { BarChart3, Trophy, FileDown, ArrowLeft } from "lucide-react";
+import { Link } from "react-router-dom";
 import {
   electionService,
   candidateService,
@@ -29,6 +31,8 @@ interface PositionResult {
 }
 
 export default function ResultsPage() {
+  const location = useLocation();
+  const isPublicView = location.pathname === "/results";
   const [elections, setElections] = useState<Election[]>([]);
   const [selectedElectionId, setSelectedElectionId] = useState("");
   const [positions, setPositions] = useState<Position[]>([]);
@@ -99,7 +103,6 @@ export default function ResultsPage() {
   const turnoutPercentage =
     roster.length > 0 ? Math.round((votersVoted / roster.length) * 100) : 0;
 
-  // Build results per position
   const positionResults: PositionResult[] = positions
     .map((pos) => {
       const posCandidates = candidates.filter((c) => c.positionId === pos.id);
@@ -107,8 +110,6 @@ export default function ResultsPage() {
         (sum, c) => sum + (voteCounts[c.id] ?? 0),
         0
       );
-      // Unopposed rule: a lone candidate must receive >= 51% of the votes cast
-      // for the position to affirm voter confidence in their nomination.
       const unopposed = posCandidates.length === 1;
       const single = posCandidates[0];
       const singlePct = unopposed && single && posVotes > 0
@@ -136,155 +137,264 @@ export default function ResultsPage() {
       selectedElection.status === "published" ||
       (selectedElection.endTime && new Date(selectedElection.endTime).getTime() < Date.now()));
 
-  /** Uganda EC-style Declaration of Results form. */
+  /** SUES-branded Declaration of Results PDF (Uganda EC format). */
   async function downloadDeclarationForm() {
     if (!selectedElection) return;
     const { jsPDF } = await import("jspdf");
     const doc = new jsPDF({ format: "a4" });
     const W = doc.internal.pageSize.getWidth();
-    const M = 16;
-    let y = 0;
+    const H = doc.internal.pageSize.getHeight();
+    const M = 18;
+    let y = M;
 
-    const box = (h: number) => {
-      doc.setDrawColor(15, 23, 42);
-      doc.setLineWidth(0.6);
-      doc.rect(M, y, W - M * 2, h);
+    // Attempt to load the SUES logo for the PDF header.
+    let logoDataUrl: string | null = null;
+    try {
+      const blob = await fetch("/sues-logo.jpg").then((r) => r.blob());
+      logoDataUrl = await new Promise<string>((res) => {
+        const reader = new FileReader();
+        reader.onload = () => res(String(reader.result));
+        reader.readAsDataURL(blob);
+      });
+    } catch { /* logo unavailable — text-only header */ }
+
+    // ── Header band ────────────────────────────────────────────────────
+    // Dark navy band across the full width of the page.
+    doc.setFillColor(15, 23, 42);          // primary-950
+    doc.rect(0, 0, W, 42, "F");
+
+    // Accent stripe at the very top.
+    doc.setFillColor(234, 179, 8);         // accent gold
+    doc.rect(0, 0, W, 3, "F");
+
+    // Logo inside the navy band.
+    if (logoDataUrl) {
+      doc.addImage(logoDataUrl, "JPEG", M, 8, 22, 22);
+    }
+
+    // Organisation name + subtitle inside the navy band.
+    const textX = logoDataUrl ? M + 28 : M;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor(255, 255, 255);
+    doc.text("SOROTI UNIVERSITY", textX, 17);
+    doc.setFontSize(14);
+    doc.text("ENGINEERING SOCIETY", textX, 25);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(203, 213, 225);      // slate-300
+    doc.text("Soroti University  |  Electoral Commission", textX, 33);
+
+    // Document title centred below the navy band.
+    y = 50;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor(15, 23, 42);
+    doc.text("DECLARATION OF RESULTS", W / 2, y, { align: "center" });
+    y += 6;
+    doc.setDrawColor(234, 179, 8);         // gold rule
+    doc.setLineWidth(0.8);
+    doc.line(M, y, W - M, y);
+    y += 10;
+
+    // ── Election details ───────────────────────────────────────────────
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(51, 65, 85);          // slate-700
+
+    const detail = (label: string, value: string) => {
+      doc.setFont("helvetica", "bold");
+      doc.text(label + ":", M, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(value, M + 38, y);
+      y += 6;
     };
 
-    // Header
-    doc.setFont("times", "bold");
-    doc.setFontSize(22);
-    doc.setTextColor(20, 20, 20);
-    doc.text("REPUBLIC OF UGANDA", W / 2, y + 14, { align: "center" });
-    doc.setFontSize(18);
-    doc.text("ELECTORAL COMMISSION", W / 2, y + 23, { align: "center" });
-    doc.setFontSize(12);
-    doc.setTextColor(60);
-    doc.text("DECLARATION OF RESULTS FORM", W / 2, y + 31, { align: "center" });
-    doc.setTextColor(0);
-    y += 36;
-
-    // Election details box
-    box(24);
-    doc.setFontSize(11);
-    doc.text(`Election: ${selectedElection.title}`, M + 4, y + 8);
+    detail("Election", selectedElection.title);
     if (selectedElection.startTime)
-      doc.text(`Poll opened: ${new Date(selectedElection.startTime).toLocaleString()}`, M + 4, y + 15);
+      detail("Poll opened", new Date(selectedElection.startTime).toLocaleString());
     if (selectedElection.endTime)
-      doc.text(`Poll closed: ${new Date(selectedElection.endTime).toLocaleString()}`, M + 4, y + 21);
-    y += 28;
+      detail("Poll closed", new Date(selectedElection.endTime).toLocaleString());
+    detail("Date declared", new Date().toLocaleString());
+    y += 4;
 
-    // Declared/winner summary
+    // ── Candidates declared elected ────────────────────────────────────
     const winners = positionResults
       .filter((pr) => pr.results.length > 0 && (pr.unopposed ? pr.affirmed : pr.results[0].votes > 0))
       .map((pr) => {
-        const winner = pr.results[0];
-        return `${pr.position.title}: ${winner.candidate.name} (${winner.votes} vote${winner.votes !== 1 ? "s" : ""}${pr.unopposed ? ", affirmed" : ""})`;
+        const w = pr.results[0];
+        return `${pr.position.title}: ${w.candidate.name}  (${w.votes} vote${w.votes !== 1 ? "s" : ""}${pr.unopposed ? "  \u2014 affirmed" : ""})`;
       });
 
-    box(winners.length * 7 + 14);
-    doc.setFont("times", "bold");
-    doc.setFontSize(12);
-    doc.text("CANDIDATES DECLARED ELECTED", M + 4, y + 8);
-    doc.setFont("times", "normal");
+    // Green header bar.
+    doc.setFillColor(22, 163, 74);         // success-600
+    doc.rect(M, y, W - M * 2, 8, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(255, 255, 255);
+    doc.text("CANDIDATES DECLARED ELECTED", M + 4, y + 5.5);
+    y += 10;
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     if (winners.length) {
-      winners.forEach((w, i) => doc.text(w, M + 8, y + 15 + i * 7));
+      winners.forEach((w) => { doc.text(w, M + 4, y); y += 6; });
     } else {
-      doc.text("(No position has met the required threshold yet.)", M + 8, y + 15);
+      doc.text("No position has met the required threshold yet.", M + 4, y);
+      y += 6;
     }
-    y += winners.length * 7 + 14 + 8;
+    y += 6;
 
-    // Per-position declaration tables
+    // ── Per-position tables ────────────────────────────────────────────
     for (const pr of positionResults) {
-      if (y > doc.internal.pageSize.getHeight() - 90) { doc.addPage(); y = M; }
-      doc.setFont("times", "bold");
-      doc.setFontSize(13);
-      doc.text(`DECLARATION OF RESULTS - ${pr.position.title}`, M, y + 2);
+      if (y > H - 80) { doc.addPage(); y = M; }
+
+      // Position title with navy left accent.
+      doc.setFillColor(15, 23, 42);
+      doc.rect(M, y, 3, 8, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text(pr.position.title.toUpperCase(), M + 7, y + 5.5);
+      y += 10;
+
+      // Table header row.
+      doc.setFillColor(241, 245, 249);     // slate-100
+      doc.rect(M, y, W - M * 2, 7, "F");
+      doc.setDrawColor(203, 213, 225);     // slate-300
+      doc.setLineWidth(0.3);
+      doc.line(M, y + 7, M + W - M * 2, y + 7);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);     // slate-500
+      doc.text("CANDIDATE", M + 3, y + 5);
+      doc.text("VOTES", M + 95, y + 5, { align: "left" });
+      doc.text("%", W - M - 3, y + 5, { align: "right" });
       y += 7;
 
-      // header row
-      doc.setDrawColor(15, 23, 42);
-      doc.setLineWidth(0.5);
-      doc.rect(M, y, W - M * 2, 8);
+      // Data rows.
+      doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
-      doc.text("Candidate", M + 3, y + 6);
-      doc.text("Votes obtained", W - M - 3, y + 6, { align: "right" });
-      doc.text("%", M + 70, y + 6);
-      y += 8;
-
-      let rows = pr.results.length || 1;
-      if (y + rows * 8 > doc.internal.pageSize.getHeight() - 70) { doc.addPage(); y = M; }
-      for (let i = 0; i < rows; i++) {
+      for (let i = 0; i < pr.results.length; i++) {
         const r = pr.results[i];
-        doc.rect(M, y, W - M * 2, 8);
-        doc.setFontSize(10);
-        doc.text(r ? r.candidate.name : "No candidates", M + 3, y + 6);
-        doc.text(r ? String(r.votes) : "0", W - M - 3, y + 6, { align: "right" });
-        doc.text(r ? `${r.percentage}%` : "0%", M + 70, y + 6);
-        y += 8;
+        if (i % 2 === 0) {
+          doc.setFillColor(248, 250, 252); // slate-50
+          doc.rect(M, y, W - M * 2, 7, "F");
+        }
+        const isWinner = i === 0 && r.votes > 0 && (pr.unopposed ? pr.affirmed : true);
+        if (isWinner) {
+          doc.setFont("helvetica", "bold");
+        }
+        doc.setTextColor(15, 23, 42);
+        doc.text(r.candidate.name, M + 3, y + 5);
+        doc.text(String(r.votes), M + 95, y + 5, { align: "left" });
+        doc.text(`${r.percentage}%`, W - M - 3, y + 5, { align: "right" });
+        doc.setFont("helvetica", "normal");
+        doc.setDrawColor(226, 232, 240);   // slate-200
+        doc.line(M, y + 7, M + W - M * 2, y + 7);
+        y += 7;
       }
 
-      // winner line
-      const w = pr.unopposed
+      // Winner declaration line.
+      const wText = pr.unopposed
         ? pr.affirmed
-          ? "AFFIRMED (unopposed, >= 51%)"
-          : "NOT AFFIRMED (unopposed, below 51%)"
+          ? "AFFIRMED (unopposed, 51%+ of votes cast)"
+          : "NOT AFFIRMED (unopposed, below 51% threshold)"
         : pr.results[0] && pr.results[0].votes > 0
-          ? `${pr.results[0].candidate.name} DECLARED ELECTED`
-          : "No winner yet";
-      doc.setFont("times", "bold");
-      doc.setFontSize(10.5);
-      doc.text(`Declared: ${w}`, M, y + 6);
-      doc.setFont("times", "normal");
-      y += 12;
+          ? `${pr.results[0].candidate.name}  \u2014 DECLARED ELECTED`
+          : "No winner";
+
+      doc.setFillColor(254, 252, 232);      // yellow-50
+      doc.rect(M, y, W - M * 2, 9, "F");
+      doc.setDrawColor(234, 179, 8);        // gold border
+      doc.setLineWidth(0.4);
+      doc.rect(M, y, W - M * 2, 9, "S");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(146, 64, 14);        // amber-800
+      doc.text("Declared:  " + wText, M + 3, y + 6);
+      doc.setFont("helvetica", "normal");
+      y += 14;
     }
 
-    // Totals
-    if (y > doc.internal.pageSize.getHeight() - 90) { doc.addPage(); y = M; }
+    // ── Summary of returns ─────────────────────────────────────────────
+    if (y > H - 80) { doc.addPage(); y = M; }
     const totalVotes = Object.values(voteCounts).reduce((s, v) => s + v, 0);
-    box(34);
-    doc.setFont("times", "bold");
-    doc.setFontSize(11);
-    doc.text("SUMMARY OF RETURNS", M + 4, y + 7);
-    doc.setFont("times", "normal");
-    doc.setFontSize(10);
-    doc.text(`Total valid votes cast: ${totalVotes}`, M + 4, y + 14);
-    doc.text(`Eligible voters: ${roster.length}`, M + 4, y + 20);
-    doc.text(`Turnout: ${turnoutPercentage}%`, M + 4, y + 26);
-    doc.text("Invalid/rejected ballots: N/A (system records only valid votes)", M + 4, y + 31);
-    y += 38;
 
-    // Declaration paragraph + signatures
-    if (y > doc.internal.pageSize.getHeight() - 80) { doc.addPage(); y = M; }
+    doc.setFillColor(15, 23, 42);
+    doc.rect(M, y, W - M * 2, 8, "F");
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
+    doc.setTextColor(255, 255, 255);
+    doc.text("SUMMARY OF RETURNS", M + 4, y + 5.5);
+    y += 10;
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    const row = (label: string, value: string) => {
+      doc.setFont("helvetica", "bold");
+      doc.text(label + ":", M + 4, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(value, M + 60, y);
+      y += 6;
+    };
+    row("Total valid votes cast", String(totalVotes));
+    row("Registered voters", String(roster.length));
+    row("Voters who participated", String(votersVoted));
+    row("Turnout", `${turnoutPercentage}%`);
+    row("Invalid / rejected ballots", "N/A (system records valid votes only)");
+    y += 6;
+
+    // ── Certification + signatures ─────────────────────────────────────
+    if (y > H - 80) { doc.addPage(); y = M; }
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(10);
+    doc.setTextColor(51, 65, 85);
     doc.text(
-      "I, the Returning Officer, hereby certify that the results shown on this form are a true and",
-      M,
-      y
+      "I, the Returning Officer, hereby certify that the results shown above are a true and",
+      M, y
     );
     doc.text(
       "accurate record of the votes cast and counted, and I declare them accordingly.",
-      M,
-      y + 6
+      M, y + 6
     );
     y += 16;
-    const sigW = (W - M * 2 - 12) / 2;
-    const sig = (x: number, label: string) => {
-      doc.setLineWidth(0.4);
-      doc.line(x, y + 28, x + sigW, y + 28);
-      doc.text(label, x, y + 34);
-    };
-    sig(M, "Returning Officer");
-    sig(M + sigW + 12, "Candidate / Representative");
-    y += 44;
-    sig(M, "Observer 1");
-    sig(M + sigW + 12, "Observer 2");
-    y += 40;
-    doc.setFontSize(10);
-    doc.text(`Signed/declared this ${new Date().toLocaleString()}`, M, y);
 
-    doc.save(`Declaration-Of-Results-${selectedElection.title.replace(/[^a-z0-9]+/gi, "-")}.pdf`);
+    const sigW = (W - M * 2 - 16) / 2;
+    const sigLine = (x: number, label: string) => {
+      doc.setDrawColor(15, 23, 42);
+      doc.setLineWidth(0.4);
+      doc.line(x, y + 24, x + sigW, y + 24);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.text(label, x, y + 30);
+    };
+
+    sigLine(M, "Returning Officer");
+    sigLine(M + sigW + 16, "Candidate / Representative");
+    y += 38;
+    sigLine(M, "Observer 1");
+    sigLine(M + sigW + 16, "Observer 2");
+    y += 40;
+
+    // Footer.
+    doc.setDrawColor(234, 179, 8);
+    doc.setLineWidth(0.5);
+    doc.line(M, y, W - M, y);
+    y += 4;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184);
+    doc.text(
+      "Generated by SUES Electoral Commission  |  Soroti University Engineering Society  |  " +
+        new Date().toLocaleString(),
+      M, y
+    );
+
+    doc.save(`SUES-Declaration-${selectedElection.title.replace(/[^a-z0-9]+/gi, "-")}.pdf`);
   }
 
   async function downloadPdf() {
@@ -419,24 +529,51 @@ export default function ResultsPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-start justify-between flex-wrap gap-3 mb-8 border-b-2 border-primary-900 pb-4">
+    <div className={isPublicView ? "min-h-screen bg-slate-50" : "space-y-6 animate-fade-in"}>
+      {/* Public layout wrapper */}
+      {isPublicView && (
+        <header className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm">
+          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <img src="/sues-logo.jpg" alt="SUES logo" className="w-9 h-9 object-contain rounded-sm flex-shrink-0" />
+              <span className="text-xs font-bold tracking-widest text-primary-900 uppercase truncate">
+                SUES Elections
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <Link to="/vote" className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-900 hover:underline">
+                <ArrowLeft size={14} />
+                Back to Voting
+              </Link>
+            </div>
+          </div>
+        </header>
+      )}
+      <div className={isPublicView ? "max-w-5xl mx-auto px-4 py-8 space-y-6" : ""}>
+
+      {/* Page header */}
+      <div className="mb-8 border-b-2 border-primary-900 pb-4">
         <div className="flex items-center gap-4">
-          <img
-            src="/sues-logo.jpg"
-            alt="SUES logo"
-            className="w-12 h-12 object-contain rounded-sm hidden sm:block"
-          />
+          {!isPublicView && (
+            <img src="/sues-logo.jpg" alt="SUES logo" className="w-12 h-12 object-contain rounded-sm hidden sm:block" />
+          )}
+          {isPublicView && (
+            <img src="/sues-logo.jpg" alt="SUES logo" className="w-12 h-12 object-contain rounded-sm" />
+          )}
           <div>
-            <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-1">SUES Administration</h2>
+            <h2 className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-1">
+              {isPublicView ? "Soroti University Engineering Society" : "SUES Administration"}
+            </h2>
             <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">Election Results</h1>
             <p className="text-sm text-slate-600 mt-2">
-              Results are calculated from actual cast votes and update in real time.
+              {isElectionOver
+                ? "Results are official. The ballot has been counted and declared."
+                : "Results are calculated from actual cast votes and update in real time."}
             </p>
           </div>
         </div>
         {selectedElection && positionResults.length > 0 && (
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-col items-end gap-2 mt-4 sm:mt-0">
             {isElectionOver && (
               <Button onClick={downloadDeclarationForm} className="!bg-success-600 hover:!bg-success-700">
                 <FileDown size={18} />
@@ -460,9 +597,9 @@ export default function ResultsPage() {
                 Polls have closed — results are now official.
               </p>
               <p className="text-xs text-success-700 mt-1">
-                The system has automatically tallied the final results. Download the{" "}
-                <strong>Declaration of Results</strong> form (Uganda Electoral Commission format)
-                to certify the winning candidates.
+                The system has automatically tallied the final results. The{" "}
+                <strong>Declaration of Results</strong> form certifies the winning candidates for
+                each position.
               </p>
             </div>
           </div>
@@ -606,6 +743,7 @@ export default function ResultsPage() {
           )}
         </>
       )}
+      </div>
     </div>
   );
 }

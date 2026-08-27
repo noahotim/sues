@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { CheckSquare, CheckCircle2, Clock, AlertCircle, LogOut, LayoutDashboard } from "lucide-react";
+import { CheckSquare, CheckCircle2, Clock, AlertCircle, LogOut, LayoutDashboard, BarChart3 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import {
   electionService,
@@ -202,6 +202,15 @@ export default function VotePage() {
                 Dashboard
               </Link>
             )}
+            {permissions.includes("VIEW_RESULTS") && (
+              <Link
+                to="/results"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-900 hover:underline"
+              >
+                <BarChart3 size={14} />
+                Results
+              </Link>
+            )}
             <Button variant="secondary" onClick={handleSignOut} className="!px-3 !py-2">
               <LogOut size={16} />
               Sign Out
@@ -323,6 +332,13 @@ export default function VotePage() {
                                 Voting ended at <strong>{new Date(b.election.endTime!).toLocaleString()}</strong>.
                                 Ballots can no longer be cast.
                               </p>
+                              <Link
+                                to="/results"
+                                className="inline-flex items-center gap-1.5 mt-3 text-xs font-semibold text-primary-900 hover:underline"
+                              >
+                                <BarChart3 size={13} />
+                                View Official Results
+                              </Link>
                             </div>
                           </div>
                         </Card>

@@ -36,7 +36,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     PERMISSIONS.VOTE
   ],
   'VOTER': [
-    PERMISSIONS.VOTE
+    PERMISSIONS.VOTE,
+    PERMISSIONS.VIEW_RESULTS
   ]
 };
 
