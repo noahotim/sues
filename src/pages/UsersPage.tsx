@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { ShieldCheck, UserPlus, Search, Trash2 } from "lucide-react";
+import { ShieldCheck, UserPlus, Search, Trash2, Pencil } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import {
   authService,
@@ -36,6 +36,10 @@ export default function UsersPage() {
   const [newRole, setNewRole] = useState("VOTER");
   const [formError, setFormError] = useState("");
 
+  // Edit-name modal state
+  const [editing, setEditing] = useState<RegisterEntry | null>(null);
+  const [editName, setEditName] = useState("");
+
   // Delete confirmation state
   const [toDelete, setToDelete] = useState<RegisterEntry | null>(null);
 
@@ -43,7 +47,7 @@ export default function UsersPage() {
     setLoading(true);
     setError(false);
     try {
-      const { data: r } = await authService.getRegister();
+      const { data: r } = await authService.getDirectory();
       if (r) setRegister(r);
     } catch {
       setError(true);
@@ -127,6 +131,30 @@ export default function UsersPage() {
     }
   }
 
+  function openEdit(entry: RegisterEntry) {
+    setEditName(entry.fullName);
+    setEditing(entry);
+  }
+
+  async function handleSaveName() {
+    if (!editing) return;
+    setFormError("");
+    setBusy(true);
+    try {
+      const { error: nameErr } = await authService.updateRegisterName(editing.email, editName);
+      if (nameErr) {
+        setFormError(nameErr);
+        return;
+      }
+      setRegister((prev) =>
+        prev.map((e) => (e.email === editing.email ? { ...e, fullName: editName.trim() } : e))
+      );
+      setEditing(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const filtered = search
     ? register.filter(
         (e) =>
@@ -202,7 +230,9 @@ export default function UsersPage() {
                 {filtered.map((e) => (
                   <tr key={e.email} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-slate-900">
-                      {e.fullName || "—"}
+                      {e.fullName || (
+                        <span className="text-slate-400 italic">Name not set</span>
+                      )}
                       {isSelf(e.email) && (
                         <span className="ml-2 text-xs text-primary-600 font-normal">(You)</span>
                       )}
@@ -227,7 +257,14 @@ export default function UsersPage() {
                         ))}
                       </select>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => openEdit(e)}
+                        title="Edit name"
+                        className="inline-flex items-center justify-center p-2 rounded-sm text-slate-400 hover:text-primary-700 hover:bg-primary-50 transition-colors"
+                      >
+                        <Pencil size={16} />
+                      </button>
                       <button
                         onClick={() => setToDelete(e)}
                         disabled={isSelf(e.email)}
@@ -293,6 +330,31 @@ export default function UsersPage() {
             </Button>
             <Button onClick={handleAdd} disabled={busy}>
               {busy ? "Adding..." : "Add Person"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Name Modal */}
+      <Modal open={!!editing} onClose={() => setEditing(null)} title="Edit Person's Name">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500">
+            Set or correct the name for <span className="font-medium text-slate-700">{editing?.email}</span>.
+          </p>
+          <Input
+            label="Full Name"
+            value={editName}
+            onChange={setEditName}
+            placeholder="e.g. Apio Samson"
+            required
+          />
+          {formError && <p className="text-sm text-error-600">{formError}</p>}
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveName} disabled={busy}>
+              {busy ? "Saving..." : "Save Name"}
             </Button>
           </div>
         </div>

@@ -52,9 +52,16 @@ export const rosterService = {
       await setDoc(ref, fullData);
       // Also add to the system-wide register so this voter is eligible in
       // every active election (rules let election managers maintain it).
+      // The register entry carries the voter's name so the User Management
+      // page can show who owns each email.
       await setDoc(
         doc(db, "eligible_emails", voterEmail),
-        { email: voterEmail, role: "VOTER", addedAt: serverTimestamp() },
+        {
+          email: voterEmail,
+          fullName: data.voterName.trim(),
+          role: "VOTER",
+          addedAt: serverTimestamp(),
+        },
         { merge: true }
       );
       auditService.log("VOTER_ADDED", "voter", voterEmail, { electionId: data.electionId });
@@ -170,10 +177,16 @@ export const rosterService = {
           votedPositions: existing.exists() ? (existing.data()?.votedPositions || []) : [],
         };
         await setDoc(ref, fullData);
-        // Add to the system-wide register too (eligible in every election).
+        // Add to the system-wide register too (eligible in every election),
+        // carrying the voter's name so User Management can show email owners.
         await setDoc(
           doc(db, "eligible_emails", email),
-          { email, role: "VOTER", addedAt: serverTimestamp() },
+          {
+            email,
+            fullName: (voter.name || "").trim(),
+            role: "VOTER",
+            addedAt: serverTimestamp(),
+          },
           { merge: true }
         );
         inserted++;

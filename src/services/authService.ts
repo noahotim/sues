@@ -256,6 +256,62 @@ export const authService = {
   },
 
   /**
+   * Composite directory for User Management: every registered person joined
+   * with their best-known name and role, resolved across the register,
+   * election rosters, and signed-in profiles. This ensures the chairperson
+   * always sees the name behind each email.
+   */
+  getDirectory: async (): Promise<{ data: RegisterEntry[] | null; error: string | null }> => {
+    try {
+      const [regSnap, rosterSnap, userSnap] = await Promise.all([
+        getDocs(collection(db, "eligible_emails")),
+        getDocs(collection(db, "voter_roster")),
+        getDocs(collection(db, "users")),
+      ]);
+
+      // nameByEmail / roleByEmail: best available value from any source
+      const nameByEmail = new Map<string, string>();
+      const roleByEmail = new Map<string, string>();
+
+      const putName = (email: string, name: string) => {
+        const em = email.toLowerCase().trim();
+        if (!em || !name) return;
+        const existing = nameByEmail.get(em) || "";
+        // prefer the longest / most complete name
+        if (name.length > existing.length) nameByEmail.set(em, name);
+      };
+
+      for (const d of rosterSnap.docs) {
+        const data = d.data();
+        if (data.voterEmail) putName(data.voterEmail, data.voterName || "");
+      }
+      for (const d of userSnap.docs) {
+        const data = d.data();
+        if (data.email) {
+          putName(data.email, data.fullName || "");
+          if (data.role) roleByEmail.set(data.email.toLowerCase().trim(), data.role);
+        }
+      }
+
+      const entries = regSnap.docs.map((d): RegisterEntry => {
+        const data = d.data();
+        const email = (data.email || d.id).toLowerCase().trim();
+        return {
+          id: d.id,
+          email,
+          fullName: data.fullName || nameByEmail.get(email) || "",
+          roleId: data.role || roleByEmail.get(email) || "VOTER",
+          addedAt: data.addedAt,
+        };
+      });
+
+      return { data: entries, error: null };
+    } catch (error: any) {
+      return { data: null, error: error.message };
+    }
+  },
+
+  /**
    * Add a person to the register with an assigned role. Creating an
    * eligible_emails entry provisions the person: staff (non-VOTER) can sign in
    * immediately; VOTERs gain system-wide eligibility (plus a roster row once
@@ -304,6 +360,32 @@ export const authService = {
         } catch { /* profile may be unmanaged; register entry is authoritative */ }
       }
       auditService.log("USER_ROLE_UPDATED", "user", em, { role, source: "register" });
+      return { error: null };
+    } catch (error: any) {
+      return { error: error.message };
+    }
+  },
+
+  /**
+   * Set (or correct) a person's display name on the register, so the
+   * User Management page shows who owns each email.
+   */
+  updateRegisterName: async (email: string, fullName: string) => {
+    try {
+      const em = email.trim().toLowerCase();
+      if (!fullName.trim()) return { error: "A name is required." };
+      await updateDoc(doc(db, "eligible_emails", em), {
+        fullName: fullName.trim(),
+        updatedAt: serverTimestamp(),
+      });
+      // Sync the signed-in profile name too, if one exists.
+      const users = await getDocs(query(collection(db, "users"), where("email", "==", em)));
+      for (const u of users.docs) {
+        try {
+          await updateDoc(u.ref, { fullName: fullName.trim() });
+        } catch { /* register entry is authoritative */ }
+      }
+      auditService.log("USER_ROLE_UPDATED", "user", em, { source: "name" });
       return { error: null };
     } catch (error: any) {
       return { error: error.message };
