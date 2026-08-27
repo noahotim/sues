@@ -27,6 +27,9 @@ export const authService = {
   signInWithGoogle: async (): Promise<{ user: FirebaseUser | null; error: string | null; redirecting?: boolean }> => {
     try {
       const provider = new GoogleAuthProvider();
+      // Always show the Google account chooser, so a user can pick a DIFFERENT
+      // account (e.g. when a device has several Google accounts signed in).
+      provider.setCustomParameters({ prompt: "select_account" });
 
       // Prefer popup; some browsers block it, in which case fall back to a
       // full-page redirect (works everywhere, immune to popup blockers).

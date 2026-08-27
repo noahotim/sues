@@ -339,6 +339,75 @@ export default function VotePage() {
                             <p className="text-sm text-slate-500 py-4 text-center">
                               No candidates for this position.
                             </p>
+                          ) : positionCandidates.length === 1 ? (
+                            <>
+                              <div className="bg-warning-50 border border-warning-200 rounded-sm px-3 py-2 mb-3">
+                                <p className="text-xs text-warning-700">
+                                  This position is <strong>unopposed</strong>. Casting your vote affirms
+                                  the nomination (at least 51% is required to confirm).
+                                </p>
+                              </div>
+                              <div className="space-y-2">
+                                {positionCandidates.map((cand) => (
+                                  <label
+                                    key={cand.id}
+                                    className={`flex items-start gap-4 p-4 rounded-sm border-2 cursor-pointer transition-all ${
+                                      selected === cand.id
+                                        ? "border-primary-900 bg-primary-50"
+                                        : "border-slate-200 hover:border-slate-300"
+                                    }`}
+                                  >
+                                    <input
+                                      type="radio"
+                                      name={key}
+                                      value={cand.id}
+                                      checked={selected === cand.id}
+                                      onChange={() =>
+                                        setSelections((prev) => ({ ...prev, [key]: cand.id }))
+                                      }
+                                      className="mt-1 accent-primary-900 w-4 h-4"
+                                    />
+                                    {cand.photoUrl ? (
+                                      <img
+                                        src={cand.photoUrl}
+                                        alt={cand.name}
+                                        className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                                      />
+                                    ) : (
+                                      <div className="w-12 h-12 bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-slate-500 font-semibold text-lg">
+                                          {cand.name.charAt(0).toUpperCase()}
+                                        </span>
+                                      </div>
+                                    )}
+                                    <div className="flex-1">
+                                      <p className="font-bold text-slate-900 text-base">{cand.name}</p>
+                                      {cand.bio && (
+                                        <p className="text-sm text-slate-600 mt-1 leading-relaxed">{cand.bio}</p>
+                                      )}
+                                    </div>
+                                  </label>
+                                ))}
+                              </div>
+                              <div className="mt-4 flex justify-end">
+                                <Button
+                                  onClick={() => handleSubmitVote(b.election.id, position.id)}
+                                  disabled={!selected || submittingKey === key}
+                                >
+                                  {submittingKey === key ? (
+                                    <>
+                                      <Spinner className="text-white" size={16} />
+                                      Submitting...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckSquare size={16} />
+                                      Confirm Selection
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            </>
                           ) : (
                             <>
                               <div className="space-y-2">

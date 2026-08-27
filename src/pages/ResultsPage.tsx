@@ -24,6 +24,8 @@ interface PositionResult {
   position: Position;
   results: { candidate: Candidate; votes: number; percentage: number }[];
   totalVotes: number;
+  unopposed: boolean;
+  affirmed: boolean;
 }
 
 export default function ResultsPage() {
@@ -105,6 +107,14 @@ export default function ResultsPage() {
         (sum, c) => sum + (voteCounts[c.id] ?? 0),
         0
       );
+      // Unopposed rule: a lone candidate must receive >= 51% of the votes cast
+      // for the position to affirm voter confidence in their nomination.
+      const unopposed = posCandidates.length === 1;
+      const single = posCandidates[0];
+      const singlePct = unopposed && single && posVotes > 0
+        ? ((voteCounts[single.id] ?? 0) / posVotes) * 100
+        : 0;
+      const affirmed = unopposed && singlePct >= 51;
       const results = posCandidates
         .map((c) => ({
           candidate: c,
@@ -112,7 +122,7 @@ export default function ResultsPage() {
           percentage: posVotes > 0 ? Math.round(((voteCounts[c.id] ?? 0) / posVotes) * 100) : 0,
         }))
         .sort((a, b) => b.votes - a.votes);
-      return { position: pos, results, totalVotes: posVotes };
+      return { position: pos, results, totalVotes: posVotes, unopposed, affirmed };
     })
     .sort((a, b) => a.position.displayOrder - b.position.displayOrder);
 
@@ -164,7 +174,7 @@ export default function ResultsPage() {
     doc.setTextColor(0);
     y += 12;
 
-    for (const { position, results, totalVotes } of positionResults) {
+    for (const { position, results, totalVotes, unopposed, affirmed } of positionResults) {
       // page-break safety
       if (y > doc.internal.pageSize.getHeight() - 60) {
         doc.addPage();
@@ -172,7 +182,7 @@ export default function ResultsPage() {
       }
       doc.setFontSize(13);
       doc.setTextColor(23, 37, 84);
-      doc.text(position.title, margin, y);
+      doc.text(position.title + (unopposed ? "  (UNOPPOSED)" : ""), margin, y);
       doc.setTextColor(0);
       y += 7;
 
@@ -199,6 +209,19 @@ export default function ResultsPage() {
         y += 9;
       }
       doc.text(`Position total: ${totalVotes} vote(s)`, margin, y + 2);
+      y += 6;
+      if (unopposed) {
+        doc.setFontSize(9);
+        doc.setTextColor(180, 83, 9);
+        doc.text(
+          affirmed
+            ? `Unopposed candidate AFFIRMED (>= 51% of votes cast).`
+            : `Unopposed candidate NOT affirmed (below the 51% threshold).`,
+          margin,
+          y + 5
+        );
+        doc.setTextColor(0);
+      }
       y += 12;
     }
 
@@ -326,13 +349,22 @@ export default function ResultsPage() {
             </Card>
           ) : (
             <div className="space-y-6">
-              {positionResults.map(({ position, results, totalVotes }) => (
+              {positionResults.map(({ position, results, totalVotes, unopposed, affirmed }) => (
                 <Card key={position.id} className="p-5 rounded-sm shadow-none border border-slate-200">
                   <div className="flex items-center justify-between mb-5 border-b border-slate-100 pb-3">
                     <div>
-                      <h3 className="text-lg font-bold text-primary-900">{position.title}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-primary-900">{position.title}</h3>
+                        {unopposed && <Badge variant="warning">Unopposed</Badge>}
+                      </div>
                       {position.description && (
                         <p className="text-sm text-slate-600 mt-1">{position.description}</p>
+                      )}
+                      {unopposed && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          Unopposed nomination — requires <strong>at least 51%</strong> of votes cast
+                          to be affirmed.
+                        </p>
                       )}
                     </div>
                     <Badge variant="neutral">{totalVotes} vote{totalVotes !== 1 ? "s" : ""}</Badge>
@@ -346,12 +378,18 @@ export default function ResultsPage() {
                         <div key={r.candidate.id}>
                           <div className="flex items-center justify-between mb-1.5">
                             <div className="flex items-center gap-2">
-                              {idx === 0 && r.votes > 0 && (
+                              {idx === 0 && r.votes > 0 && (unopposed ? affirmed : true) && (
                                 <Trophy size={16} className="text-warning-500" />
                               )}
                               <span className="text-sm font-medium text-slate-900">
                                 {r.candidate.name}
                               </span>
+                              {unopposed && idx === 0 && affirmed && (
+                                <Badge variant="success">Affirmed</Badge>
+                              )}
+                              {unopposed && idx === 0 && !affirmed && (
+                                <Badge variant="warning">Not affirmed</Badge>
+                              )}
                             </div>
                             <div className="flex items-center gap-3 text-sm">
                               <span className="text-slate-600">{r.votes} vote{r.votes !== 1 ? "s" : ""}</span>
@@ -363,15 +401,21 @@ export default function ResultsPage() {
                           <div className="h-3 rounded-sm bg-slate-100 overflow-hidden mt-1">
                             <div
                               className={`h-full transition-all duration-500 ${
-                                idx === 0 && r.votes > 0
+                                idx === 0 && r.votes > 0 && (unopposed ? affirmed : true)
                                   ? "bg-success-600"
                                   : "bg-primary-900"
                               }`}
-                              style={{ width: `${r.percentage}%` }}
+                              style={{ width: `${Math.min(100, r.percentage)}%` }}
                             />
                           </div>
                         </div>
                       ))}
+                      {unopposed && !affirmed && (
+                        <p className="text-xs text-warning-700 bg-warning-50 border border-warning-200 rounded-sm px-3 py-2">
+                          This candidate received below the 51% threshold — the nomination is
+                          <strong> not affirmed</strong>.
+                        </p>
+                      )}
                     </div>
                   )}
                 </Card>

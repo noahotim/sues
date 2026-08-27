@@ -81,18 +81,20 @@ export default function LoginPage() {
             </summary>
             <ul className="mt-3 space-y-2 text-slate-600">
               <li>
-                <span className="font-medium text-primary-900">Chairperson, Secretary &amp; Assistant</span> —
-                university staff listed on the election register. Sign in with your registered
-                <code className="text-xs bg-slate-100 px-1 py-0.5 rounded mx-1">@sun.ac.ug</code>
-                Google account (e.g. <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">chair.sues@sun.ac.ug</code>).
+                <span className="font-medium text-primary-900">Voters</span> —
+                students uploaded onto this election's <strong>voter roster</strong> (by the
+                Electoral Commission via CSV import). Sign in with the exact Google email on that
+                roster.
               </li>
               <li>
-                <span className="font-medium text-primary-900">Voters</span> — students imported onto a
-                voter roster via CSV. Sign in with the exact email on that roster.
+                <span className="font-medium text-primary-900">Election officials</span> —
+                members of the Electoral Commission (Chairperson, Secretary, Assistant) are also
+                added to the register and sign in with the Google email registered for them.
               </li>
               <li className="text-slate-500">
-                Only emails found on the register or a roster are allowed; everyone else is signed out
-                automatically. In this demo the Firebase Auth emulator is used, so any password is accepted.
+                Only emails found on the voter roster or the officials' register are allowed;
+                everyone else is signed out automatically. If your email is not recognized,
+                contact the Electoral Commission (see below).
               </li>
             </ul>
           </details>
