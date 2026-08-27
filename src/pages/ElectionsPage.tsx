@@ -57,8 +57,17 @@ export default function ElectionsPage() {
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    setLoading(true);
+    setError(false);
+    // Realtime: the election list stays live as elections are added/edited
+    // (including by other admins) - no manual refresh needed.
+    const unsub = electionService.subscribeToElections((data) => {
+      setElections(data);
+      setLoading(false);
+      setError(false);
+    });
+    return unsub;
+  }, []);
 
   async function handleCreate() {
     setSubmitting(true);

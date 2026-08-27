@@ -79,6 +79,17 @@ export const electionService = {
     }
   },
 
+  /** Live positions for a given election (realtime via onSnapshot). */
+  subscribeToPositions: (electionId: string, callback: (data: Position[]) => void) => {
+    const q = query(collection(db, "positions"), where("electionId", "==", electionId));
+    return onSnapshot(q, (snapshot) => {
+      const positions = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Position))
+        .sort((a, b) => a.displayOrder - b.displayOrder);
+      callback(positions);
+    });
+  },
+
   createElection: async (data: Omit<Election, "id">) => {
     try {
       const newDocRef = doc(collection(db, "elections"));

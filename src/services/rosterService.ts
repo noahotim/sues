@@ -20,6 +20,34 @@ export const rosterService = {
     });
   },
 
+  // A voter is only allowed to read their OWN roster row (rules enforce this),
+  // so this uses an email-scoped compound query live. The callback fires with
+  // null when the voter has no row yet (e.g. register member not yet
+  // provisioned) so the caller can materialize one.
+  subscribeToMyRosterEntry: (electionId: string, voterEmail: string, callback: (data: VoterRosterEntry | null) => void) => {
+    const q = query(
+      collection(db, "voter_roster"),
+      where("electionId", "==", electionId),
+      where("voterEmail", "==", voterEmail.toLowerCase()),
+    );
+    return onSnapshot(q, (snapshot) => {
+      if (snapshot.empty) {
+        callback(null);
+        return;
+      }
+      const doc = snapshot.docs[0];
+      const data = doc.data();
+      callback({
+        id: doc.id,
+        electionId,
+        voterEmail: data.voterEmail,
+        voterName: data.voterName || "",
+        hasVoted: Boolean(data.hasVoted),
+        votedPositions: Array.isArray(data.votedPositions) ? data.votedPositions : [],
+      } as VoterRosterEntry);
+    });
+  },
+
   getRoster: async (electionId: string) => {
     try {
       const q = query(collection(db, "voter_roster"), where("electionId", "==", electionId));

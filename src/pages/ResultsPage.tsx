@@ -11,6 +11,7 @@ import {
   type Position,
   type Candidate,
   type VoterRosterEntry,
+  type Vote,
 } from "../services";
 import {
   Card,
@@ -61,8 +62,20 @@ export default function ResultsPage() {
   }, [selectedElectionId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    setLoading(true);
+    setError(false);
+    // Realtime election list for the picker.
+    const unsubE = electionService.subscribeToElections((data) => {
+      setElections(data);
+      if (data.length > 0 && !selectedElectionId) {
+        setSelectedElectionId(data[0].id);
+      }
+      setLoading(false);
+      setError(false);
+    });
+    return unsubE;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!selectedElectionId) {
@@ -72,31 +85,41 @@ export default function ResultsPage() {
       setVoteCounts({});
       return;
     }
-    (async () => {
-      try {
-        const [posRes, candRes, rosRes, votesRes] = await Promise.all([
-          electionService.getPositions(selectedElectionId),
-          candidateService.getCandidates(selectedElectionId),
-          rosterService.getRoster(selectedElectionId),
-          voteService.getVotes(selectedElectionId),
-        ]);
-        if (posRes.data) setPositions(posRes.data);
-        if (candRes.data) setCandidates(candRes.data);
-        if (rosRes.data) setRoster(rosRes.data);
-        if (votesRes.data) {
-          const counts: Record<string, number> = {};
-          votesRes.data.forEach(v => {
-            counts[v.candidateId] = (counts[v.candidateId] || 0) + 1;
-          });
-          setVoteCounts(counts);
-        }
-      } catch {
-        setPositions([]);
-        setCandidates([]);
-        setRoster([]);
-        setVoteCounts({});
-      }
-    })();
+    // Realtime positions + candidates + roster + votes - tallies update live
+    // as ballots are cast, with no manual refresh.
+    const toCounts = (votes: Vote[]) => {
+      const counts: Record<string, number> = {};
+      votes.forEach((v) => {
+        counts[v.candidateId] = (counts[v.candidateId] || 0) + 1;
+      });
+      return counts;
+    };
+    const unsubP = electionService.subscribeToPositions(selectedElectionId, (data) => {
+      setPositions(data);
+      setLoading(false);
+      setError(false);
+    });
+    const unsubC = candidateService.subscribeToCandidates(selectedElectionId, (data) => {
+      setCandidates(data);
+      setLoading(false);
+      setError(false);
+    });
+    const unsubR = rosterService.subscribeToRoster(selectedElectionId, (data) => {
+      setRoster(data);
+      setLoading(false);
+      setError(false);
+    });
+    const unsubV = voteService.subscribeToVotes(selectedElectionId, (data) => {
+      setVoteCounts(toCounts(data));
+      setLoading(false);
+      setError(false);
+    });
+    return () => {
+      unsubP();
+      unsubC();
+      unsubR();
+      unsubV();
+    };
   }, [selectedElectionId]);
 
   const votersVoted = roster.filter((r) => r.hasVoted).length;

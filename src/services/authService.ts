@@ -1,5 +1,5 @@
 import { auth, db, functions } from "../lib/firebase";
-import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, where } from "firebase/firestore";
+import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, where, onSnapshot } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { auditService } from "./auditService";
@@ -309,6 +309,86 @@ export const authService = {
     } catch (error: any) {
       return { data: null, error: error.message };
     }
+  },
+
+  /**
+   * Realtime composite directory for User Management. Subscribes to the
+   * register, election rosters, and user profiles simultaneously, so the
+   * chairperson sees adds/removes/role/name changes without refreshing. Callers
+   * must pass in an unsubscribe function setter to clean up on unmount.
+   */
+  subscribeToDirectory: (
+    setUnsub: (fn: () => void) => void,
+    callback: (data: RegisterEntry[]) => void
+  ) => {
+    const nameByEmail = new Map<string, string>();
+    const roleByEmail = new Map<string, string>();
+
+    const rebuild = () => {
+      const entries = Array.from(roleByEmail.keys()).map((email): RegisterEntry => ({
+        id: email,
+        email,
+        fullName: nameByEmail.get(email) || "",
+        roleId: roleByEmail.get(email) || "VOTER",
+      }));
+      // deterministic, case-insensitive ordering by email
+      entries.sort((a, b) => a.email.localeCompare(b.email));
+      callback(entries);
+    };
+
+    const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
+      for (const d of snap.docs) {
+        const data = d.data();
+        if (data.email) {
+          const em = data.email.toLowerCase().trim();
+          roleByEmail.set(em, data.role || "VOTER");
+          const n = (data.fullName as string) || "";
+          const cur = nameByEmail.get(em) || "";
+          if (n.length > cur.length) nameByEmail.set(em, n);
+        }
+      }
+      rebuild();
+    });
+
+    const unsubRoster = onSnapshot(collection(db, "voter_roster"), (snap) => {
+      for (const d of snap.docs) {
+        const data = d.data();
+        if (data.voterEmail) {
+          const em = data.voterEmail.toLowerCase().trim();
+          const n = (data.voterName as string) || "";
+          const cur = nameByEmail.get(em) || "";
+          if (n.length > cur.length) nameByEmail.set(em, n);
+          if (!roleByEmail.has(em)) roleByEmail.set(em, "VOTER");
+        }
+      }
+      rebuild();
+    });
+
+    const unsubRegister = onSnapshot(collection(db, "eligible_emails"), (snap) => {
+      const emails = new Set<string>();
+      for (const d of snap.docs) {
+        const data = d.data();
+        const em = (data.email || d.id).toLowerCase().trim();
+        em && emails.add(em);
+        if (em) {
+          if (data.fullName) nameByEmail.set(em, data.fullName);
+          roleByEmail.set(em, data.role || "VOTER");
+        }
+      }
+      // remove entries that were deleted from the register
+      for (const em of Array.from(roleByEmail.keys())) {
+        if (!emails.has(em)) {
+          roleByEmail.delete(em);
+        }
+      }
+      rebuild();
+    });
+
+    setUnsub(() => {
+      unsubUsers();
+      unsubRoster();
+      unsubRegister();
+    });
   },
 
   /**

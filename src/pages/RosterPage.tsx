@@ -62,22 +62,33 @@ export default function RosterPage() {
   }, [selectedElectionId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    setLoading(true);
+    setError(false);
+    // Realtime election list for the picker.
+    const unsubE = electionService.subscribeToElections((data) => {
+      setElections(data);
+      if (data.length > 0 && !selectedElectionId) {
+        setSelectedElectionId(data[0].id);
+      }
+      setLoading(false);
+      setError(false);
+    });
+    return unsubE;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!selectedElectionId) {
       setRoster([]);
       return;
     }
-    (async () => {
-      try {
-        const { data } = await rosterService.getRoster(selectedElectionId);
-        if (data) setRoster(data);
-      } catch {
-        setRoster([]);
-      }
-    })();
+    // Realtime roster for the selected election - live turnout updates.
+    const unsubR = rosterService.subscribeToRoster(selectedElectionId, (data) => {
+      setRoster(data);
+      setLoading(false);
+      setError(false);
+    });
+    return unsubR;
   }, [selectedElectionId]);
 
   async function handleAdd() {

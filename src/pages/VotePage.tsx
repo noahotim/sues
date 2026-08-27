@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CheckSquare, CheckCircle2, Clock, AlertCircle, LogOut, LayoutDashboard, BarChart3 } from "lucide-react";
 import { useAuth } from "../lib/auth";
@@ -11,6 +11,7 @@ import {
   type Election,
   type Position,
   type Candidate,
+  type VoterRosterEntry,
 } from "../services";
 import {
   Card,
@@ -56,66 +57,111 @@ export default function VotePage() {
     }
   }, [authLoading, session, navigate]);
 
-  const load = useCallback(async () => {
-    if (!session?.user.email) return;
+  // ------------------------------------------------------------------
+  // Realtime data layer. We keep a low-level store of elections and per-
+  // election section data (positions/candidates/eligibility/votedPositions)
+  // all subscribed via onSnapshot, then derive the ballot list. Any change -
+  // a new active election, edited candidates, someone toggling status, or the
+  // voter's own ballots being recorded - appears with no manual refresh.
+  // ------------------------------------------------------------------
+  const [elections, setElections] = useState<Election[]>([]);
+  const [sectionData, setSectionData] = useState<
+    Record<string, { positions: Position[]; candidates: Candidate[]; eligible: boolean; votedPositions: Set<string> }>
+  >({});
+
+  const email = (session?.user.email || "").toLowerCase();
+
+  // Subscribe to the election list (realtime).
+  useEffect(() => {
+    if (!email) return;
     setLoading(true);
     setError(false);
-    try {
-      const { data } = await electionService.getElections();
-      const active = (data || []).filter((e) => e.status === "active");
+    const unsub = electionService.subscribeToElections((data) => {
+      setElections(data);
+      setLoading(false);
+      setError(false);
+    });
+    return unsub;
+  }, [email]);
 
-      // Build a ballot section for EVERY active election - the voter completes
-      // the whole slate in one pass instead of hopping between elections.
-      const sections = await Promise.all(
-        active.map(async (el) => {
-          const [posRes, candRes, rosterRes] = await Promise.all([
-            electionService.getPositions(el.id),
-            candidateService.getCandidates(el.id),
-            rosterService.getMyRosterEntry(el.id, session.user.email),
-          ]);
-          let entry = rosterRes.data;
+  const activeElections = elections.filter((e) => e.status === "active");
 
-          // The uploaded register is system-wide: register members are eligible
-          // everywhere. Materialize their per-election row for turnout tracking.
-          if (!entry) {
-            const reg = await rosterService.isOnRegister(session.user.email);
-            if (reg.data === true) {
-              rosterService
-                .ensureRosterRow(el.id, session.user.email, profile?.fullName || "")
-                .catch(() => {});
-              entry = {
-                id: `voter_${el.id}_${session.user.email.toLowerCase()}`,
-                electionId: el.id,
-                voterEmail: session.user.email.toLowerCase(),
-                voterName: profile?.fullName || "",
-                hasVoted: false,
-                votedPositions: [],
-              };
-            }
-          }
+  // Subscribe to positions + candidates + own roster row for every active
+  // election. Register members without a roster row are auto-provisioned so
+  // they are eligible and their turnout is tracked.
+  useEffect(() => {
+    if (!email || activeElections.length === 0) {
+      if (activeElections.length === 0) setBallots([]);
+      return;
+    }
+    const unsubs: (() => void)[] = [];
+    activeElections.forEach((el) => {
+      let entry: VoterRosterEntry | null = null;
 
-          const positions = (posRes.data || []).slice().sort((a, b) => a.displayOrder - b.displayOrder);
-          return {
-            election: el,
-            positions,
-            candidates: candRes.data || [],
+      const mergeEntry = () => {
+        setSectionData((prev) => ({
+          ...prev,
+          [el.id]: {
+            positions: prev[el.id]?.positions || [],
+            candidates: prev[el.id]?.candidates || [],
             eligible: !!entry,
             votedPositions: new Set(entry?.votedPositions || []),
-          } as BallotSection;
-        })
-      );
+          },
+        }));
+      };
 
-      setBallots(sections);
-    } catch {
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [session, profile]);
+      const unsubP = electionService.subscribeToPositions(el.id, (positions) => {
+        const sorted = positions.slice().sort((a, b) => a.displayOrder - b.displayOrder);
+        setSectionData((prev) => ({
+          ...prev,
+          [el.id]: { ...(prev[el.id] || { eligible: false, votedPositions: new Set() }), positions: sorted },
+        }));
+      });
+      const unsubC = candidateService.subscribeToCandidates(el.id, (candidates) => {
+        setSectionData((prev) => ({
+          ...prev,
+          [el.id]: { ...(prev[el.id] || { eligible: false, votedPositions: new Set() }), candidates },
+        }));
+      });
+      const unsubR = rosterService.subscribeToMyRosterEntry(el.id, email, (data) => {
+        entry = data;
+        // Materialize the per-election row for register members (system-wide
+        // eligibility) so they become eligible + tracked.
+        if (!entry) {
+          rosterService
+            .ensureRosterRow(el.id, email, profile?.fullName || "")
+            .catch(() => {});
+        }
+        mergeEntry();
+      });
 
+      unsubs.push(unsubP, unsubC, unsubR);
+    });
+    return () => {
+      unsubs.forEach((u) => u());
+      setSectionData({});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [email, profile, activeElections.map((e) => e.id).join(",")]);
+
+  // Derive the ballot sections from the live store.
+  const derivedBallots = useMemo<BallotSection[]>(() => {
+    return activeElections.map((el) => {
+      const sd = sectionData[el.id];
+      return {
+        election: el,
+        positions: sd?.positions || [],
+        candidates: sd?.candidates || [],
+        eligible: sd?.eligible ?? false,
+        votedPositions: sd?.votedPositions || new Set<string>(),
+      };
+    });
+  }, [activeElections, sectionData]);
+
+  // Keep ballots in sync with the derived list (preserves in-render updates too).
   useEffect(() => {
-    load();
-  }, [load]);
+    setBallots(derivedBallots);
+  }, [derivedBallots]);
 
   async function handleSignOut() {
     await authService.signOut();
@@ -192,7 +238,7 @@ export default function VotePage() {
   void confirmSignOut;
 
   if (authLoading || loading) return <LoadingState message="Loading ballot..." />;
-  if (error) return <ErrorState message="We could not load the voting interface." onRetry={load} />;
+  if (error) return <ErrorState message="We could not load the voting interface." onRetry={() => window.location.reload()} />;
 
   if (!canVote) {
     return (

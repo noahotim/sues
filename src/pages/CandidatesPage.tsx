@@ -151,8 +151,20 @@ export default function CandidatesPage() {
   }, [selectedElectionId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    setLoading(true);
+    setError(false);
+    // Realtime election list for the picker.
+    const unsubE = electionService.subscribeToElections((data) => {
+      setElections(data);
+      if (data.length > 0 && !selectedElectionId) {
+        setSelectedElectionId(data[0].id);
+      }
+      setLoading(false);
+      setError(false);
+    });
+    return unsubE;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!selectedElectionId) {
@@ -160,19 +172,21 @@ export default function CandidatesPage() {
       setCandidates([]);
       return;
     }
-    (async () => {
-      try {
-        const [posRes, candRes] = await Promise.all([
-          electionService.getPositions(selectedElectionId),
-          candidateService.getCandidates(selectedElectionId),
-        ]);
-        if (posRes.data) setPositions(posRes.data);
-        if (candRes.data) setCandidates(candRes.data);
-      } catch {
-        setPositions([]);
-        setCandidates([]);
-      }
-    })();
+    // Realtime positions + candidates for the selected election.
+    const unsubP = electionService.subscribeToPositions(selectedElectionId, (data) => {
+      setPositions(data);
+      setLoading(false);
+      setError(false);
+    });
+    const unsubC = candidateService.subscribeToCandidates(selectedElectionId, (data) => {
+      setCandidates(data);
+      setLoading(false);
+      setError(false);
+    });
+    return () => {
+      unsubP();
+      unsubC();
+    };
   }, [selectedElectionId]);
 
   async function handleDelete() {

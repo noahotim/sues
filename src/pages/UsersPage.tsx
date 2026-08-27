@@ -57,8 +57,25 @@ export default function UsersPage() {
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    setLoading(true);
+    setError(false);
+    let cleanup: (() => void) | null = null;
+    // Realtime subscription: the directory updates live as voters are added,
+    // removed, or roles/names change - no manual refresh needed.
+    authService.subscribeToDirectory(
+      (fn) => {
+        cleanup = fn;
+      },
+      (data) => {
+        setRegister(data);
+        setLoading(false);
+        setError(false);
+      }
+    );
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, []);
 
   function getRoleLabel(roleId: string): string {
     return roles.find((r) => r.id === roleId)?.label ?? roleId;
