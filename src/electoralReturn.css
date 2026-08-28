@@ -72,7 +72,9 @@
   color: #0f172a;
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.12);
   position: relative;
-  padding: 42mm 16mm 18mm;
+  display: flex;
+  flex-direction: column;
+  padding: 34mm 16mm 26mm;
   box-sizing: border-box;
   font-family: Inter, Helvetica Neue, Arial, sans-serif;
   overflow: hidden;
@@ -159,6 +161,7 @@
 
 /* ---------- Title ---------- */
 .er-title {
+  flex-shrink: 0;
   text-align: center;
   padding-bottom: 5mm;
   border-bottom: 1.5px solid #c89b2c;
@@ -472,6 +475,18 @@
 .er-footer__page {
   font-weight: 700;
   color: #08111f;
+}
+
+/* Fill the A4 sheet so every page is vertically balanced. */
+.er-page-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 6mm;
+}
+.er-page-body--balance {
+  justify-content: space-between;
 }
 
 @page {
