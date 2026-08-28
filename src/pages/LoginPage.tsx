@@ -84,13 +84,7 @@ export default function LoginPage() {
           <h1 className="text-2xl font-extrabold text-primary-900 tracking-tight mb-3">
             CONTACT NOAH
           </h1>
-          <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
-            {maintenance.message}
-          </p>
-          <p className="mt-4 text-xs text-slate-400">
-            Sign-in is temporarily disabled for all users. This screen will unlock
-            automatically once the administrator reopens the system.
-          </p>
+          <LockoutGame />
         </div>
       </div>
     );
@@ -172,6 +166,65 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * A tiny distraction to play while the system is locked: click the moving dot.
+ * Fully self-contained (no dependencies, no state shared with the app).
+ */
+function LockoutGame() {
+  const [score, setScore] = useState(0);
+  const [pos, setPos] = useState({ top: 30, left: 30 });
+  const [hit, setHit] = useState(false);
+  const [best, setBest] = useState(0);
+
+  function handleHit() {
+    const box = 300; // game area px
+    const dot = 40;
+    const top = Math.floor(Math.random() * (box - dot));
+    const left = Math.floor(Math.random() * (box - dot));
+    setPos({ top, left });
+    setScore((s) => {
+      const next = s + 1;
+      setBest((b) => Math.max(b, next));
+      return next;
+    });
+    setHit(true);
+    window.setTimeout(() => setHit(false), 120);
+  }
+
+  return (
+    <div className="mt-4 border-t border-slate-200 pt-4">
+      <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
+        Pass the time — catch the dot
+      </p>
+      <div
+        className="relative bg-slate-100 rounded-sm border border-slate-200 overflow-hidden mx-auto"
+        style={{ width: 300, height: 180 }}
+      >
+        <button
+          type="button"
+          aria-label="Catch the dot"
+          onClick={handleHit}
+          className="absolute rounded-full cursor-pointer transition-transform"
+          style={{
+            width: 40,
+            height: 40,
+            top: pos.top,
+            left: pos.left,
+            background: hit ? "#dc2626" : "#C89B2C",
+            boxShadow: `0 0 ${hit ? 20 : 10}px ${hit ? "#dc2626" : "#C89B2C"}`,
+            transform: hit ? "scale(0.85)" : "scale(1)",
+          }}
+        />
+      </div>
+      <p className="mt-2 text-xs text-slate-600">
+        Score: <span className="font-bold text-primary-900">{score}</span>
+        <span className="mx-2 text-slate-300">•</span>
+        Best: <span className="font-bold text-primary-900">{best}</span>
+      </p>
     </div>
   );
 }
