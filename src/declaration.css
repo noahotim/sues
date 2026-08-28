@@ -1,0 +1,524 @@
+/* ============================================================
+   SUES - Official Declaration of Results
+   Print-ready A4 electoral document.
+   Two sheets (page 1 / page 2), each exactly A4 portrait.
+   ============================================================ */
+
+:root {
+  --decl-navy: #0f172a;
+  --decl-navy-2: #0b1a2c;
+  --decl-gold: #c9a227;
+  --decl-gold-dark: #a8861c;
+  --decl-green: #15803d;
+  --decl-green-light: #eaf6ee;
+  --decl-slate: #334155;
+  --decl-muted: #64748b;
+  --decl-line: #e2e8f0;
+  --decl-paper: #ffffff;
+}
+
+/* Outer container shown only on screen (overlay behind the results page). */
+.decl-doc-wrapper {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #eef1f5;
+  overflow: auto;
+  padding: 24px 0 48px;
+}
+
+.decl-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  max-width: 210mm;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #ffffff;
+  border: 1px solid var(--decl-line);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  padding: 10px 16px;
+}
+
+.decl-toolbar__title {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--decl-navy);
+}
+.decl-toolbar__sub {
+  font-size: 11px;
+  color: var(--decl-muted);
+  margin-top: 2px;
+}
+
+.decl-toolbar__actions {
+  display: flex;
+  gap: 8px;
+}
+.decl-toolbar__btn {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--decl-line);
+  background: #ffffff;
+  color: var(--decl-navy);
+  cursor: pointer;
+}
+.decl-toolbar__btn--primary {
+  background: var(--decl-green);
+  border-color: var(--decl-green);
+  color: #ffffff;
+}
+.decl-toolbar__btn:hover {
+  opacity: 0.9;
+}
+
+/* ===== The A4 sheets ===== */
+.decl-sheet {
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  background: var(--decl-paper);
+  color: #0f172a;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.12);
+  position: relative;
+  padding: 14mm 16mm 20mm;
+  box-sizing: border-box;
+  font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+  overflow: hidden;
+}
+.decl-sheet + .decl-sheet {
+  margin-top: 24px;
+}
+
+/* ---------- Header band ---------- */
+.decl-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 38mm;
+  background: var(--decl-navy-2);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 16mm;
+  box-sizing: border-box;
+}
+.decl-header__gold {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3mm;
+  background: var(--decl-gold);
+}
+.decl-header__logo {
+  width: 24mm;
+  height: 24mm;
+  object-fit: contain;
+  margin-right: 8mm;
+  border-radius: 2mm;
+}
+.decl-header__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.decl-header__org {
+  font-size: 19pt;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.decl-header__society {
+  font-size: 15pt;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.decl-header__ec {
+  font-size: 9.5pt;
+  font-weight: 400;
+  color: #cbd5e1;
+  margin-top: 2px;
+}
+
+/* ---------- Document title ---------- */
+.decl-title {
+  margin-top: 34mm;
+  text-align: center;
+  padding-bottom: 5mm;
+  border-bottom: 1.5px solid var(--decl-gold);
+}
+.decl-title__main {
+  font-size: 17pt;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--decl-navy);
+  text-transform: uppercase;
+}
+.decl-title__sub {
+  font-size: 10.5pt;
+  font-weight: 600;
+  color: var(--decl-slate);
+  text-transform: uppercase;
+  margin-top: 3mm;
+  letter-spacing: 0.3px;
+}
+
+/* ---------- Section headings ---------- */
+.decl-section {
+  margin-top: 7mm;
+}
+.decl-section__head {
+  font-size: 11.5pt;
+  font-weight: 800;
+  color: var(--decl-navy);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 3mm;
+  display: flex;
+  align-items: center;
+}
+.decl-section__head::after {
+  content: "";
+  flex: 1;
+  height: 1.5px;
+  background: var(--decl-gold);
+  margin-left: 4mm;
+}
+
+/* ---------- Election information ---------- */
+.decl-info {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--decl-line);
+  border-radius: 2mm;
+  overflow: hidden;
+}
+.decl-info__cell {
+  padding: 3.5mm 5mm;
+  border-bottom: 1px solid var(--decl-line);
+  display: flex;
+  align-items: baseline;
+}
+.decl-info__cell:nth-child(odd) {
+  border-right: 1px solid var(--decl-line);
+}
+.decl-info__cell:nth-child(n + 3) {
+  border-bottom: 0;
+}
+.decl-info__label {
+  font-size: 8pt;
+  font-weight: 700;
+  color: var(--decl-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  width: 46mm;
+  flex-shrink: 0;
+}
+.decl-info__value {
+  font-size: 11pt;
+  font-weight: 700;
+  color: var(--decl-navy);
+  text-transform: uppercase;
+}
+
+/* ---------- Declaration statement ---------- */
+.decl-statement {
+  border: 1.5px solid var(--decl-navy);
+  border-radius: 2mm;
+  padding: 5mm 6mm;
+  background: #f8fafc;
+}
+.decl-statement p {
+  margin: 0;
+  font-size: 10pt;
+  line-height: 1.55;
+  color: var(--decl-slate);
+  text-align: justify;
+}
+
+/* ---------- Candidates declared elected ---------- */
+.decl-elected {
+  border-radius: 2mm;
+  overflow: hidden;
+  margin-top: 3mm;
+}
+.decl-elected__bar {
+  background: var(--decl-green);
+  color: #fff;
+  font-size: 11.5pt;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3.5mm 5mm;
+  text-align: center;
+}
+.decl-elected table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.decl-elected th,
+.decl-elected td {
+  border: 1px solid var(--decl-line);
+  padding: 3.2mm 4mm;
+  text-align: left;
+  font-size: 9.5pt;
+}
+.decl-elected th {
+  background: #f1f5f9;
+  color: var(--decl-navy);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-size: 8.5pt;
+}
+.decl-elected td {
+  color: var(--decl-slate);
+}
+.decl-elected td:nth-child(3),
+.decl-elected th:nth-child(3) {
+  text-align: center;
+}
+.decl-elected__decl {
+  font-weight: 700;
+}
+
+/* ---------- Detailed result position blocks ---------- */
+.decl-pos {
+  border: 1px solid var(--decl-line);
+  border-radius: 2mm;
+  margin-bottom: 4.5mm;
+  overflow: hidden;
+}
+.decl-pos__title {
+  background: var(--decl-navy);
+  color: #fff;
+  font-size: 10.5pt;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 3mm 4.5mm;
+}
+.decl-pos__body {
+  padding: 4mm;
+}
+.decl-pos table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.decl-pos th,
+.decl-pos td {
+  border-bottom: 1px solid var(--decl-line);
+  padding: 3mm 3.5mm;
+  text-align: left;
+  font-size: 9.5pt;
+}
+.decl-pos th {
+  color: var(--decl-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 8pt;
+  letter-spacing: 0.3px;
+  background: #f8fafc;
+}
+.decl-pos th:nth-child(2),
+.decl-pos td:nth-child(2),
+.decl-pos th:nth-child(3),
+.decl-pos td:nth-child(3) {
+  text-align: center;
+  width: 22mm;
+}
+.decl-pos td:first-child {
+  font-weight: 600;
+  color: var(--decl-navy);
+}
+.decl-pos__decl {
+  margin-top: 3.5mm;
+  background: var(--decl-green-light);
+  border: 1px solid #b7e0c3;
+  border-radius: 2mm;
+  padding: 3mm 4mm;
+  font-size: 9.5pt;
+  font-weight: 700;
+  color: var(--decl-green);
+}
+.decl-pos__decl--fail {
+  background: #fef6e7;
+  border-color: #eacf8f;
+  color: #9a6b00;
+}
+.decl-pos__decl--plain {
+  background: var(--decl-green-light);
+  border-color: #b7e0c3;
+  color: var(--decl-green);
+}
+
+/* ---------- Summary of returns ---------- */
+.decl-summary {
+  border: 1px solid var(--decl-line);
+  border-radius: 2mm;
+  overflow: hidden;
+}
+.decl-summary__bar {
+  background: var(--decl-navy);
+  color: #fff;
+  font-size: 11.5pt;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3.5mm 5mm;
+  text-align: center;
+}
+.decl-summary table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.decl-summary th,
+.decl-summary td {
+  border: 1px solid var(--decl-line);
+  padding: 3.2mm 5mm;
+  font-size: 9.5pt;
+}
+.decl-summary th {
+  text-align: left;
+  color: var(--decl-navy);
+  font-weight: 700;
+  background: #f8fafc;
+  text-transform: uppercase;
+  font-size: 8.5pt;
+  letter-spacing: 0.3px;
+}
+.decl-summary td {
+  text-align: right;
+  font-weight: 700;
+  color: var(--decl-navy);
+}
+
+/* ---------- Certification ---------- */
+.decl-cert {
+  border: 1px solid var(--decl-line);
+  border-left: 3mm solid var(--decl-gold);
+  border-radius: 2mm;
+  padding: 5mm 6mm;
+  font-style: italic;
+  font-size: 10.5pt;
+  line-height: 1.6;
+  color: var(--decl-slate);
+  background: #fffdf5;
+}
+.decl-cert strong {
+  font-style: normal;
+  color: var(--decl-navy);
+}
+
+/* ---------- Signatures ---------- */
+.decl-signatures {
+  margin-top: 6mm;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12mm 10mm;
+}
+.decl-sig {
+  text-align: center;
+}
+.decl-sig__line {
+  border-top: 1px solid var(--decl-navy);
+  padding-top: 8mm;
+}
+.decl-sig__label {
+  margin-top: 2.5mm;
+  font-size: 9pt;
+  font-weight: 700;
+  color: var(--decl-navy);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* ---------- Footer ---------- */
+.decl-footer {
+  position: absolute;
+  left: 16mm;
+  right: 16mm;
+  bottom: 10mm;
+}
+.decl-footer__gold {
+  border-top: 1.5px solid var(--decl-gold);
+  margin-bottom: 2.5mm;
+}
+.decl-footer__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 7.5pt;
+  color: var(--decl-muted);
+}
+.decl-footer__org {
+  font-weight: 700;
+}
+.decl-footer__page {
+  font-weight: 700;
+  color: var(--decl-navy);
+}
+
+/* ============ PRINT RULES ============ */
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@media print {
+  body {
+    background: #fff !important;
+  }
+  /* When the official declaration is open, hide the entire app around it. */
+  body:has(.decl-doc-wrapper) * {
+    visibility: hidden;
+  }
+  .decl-doc-wrapper,
+  .decl-doc-wrapper * {
+    visibility: visible;
+  }
+  .decl-doc-wrapper {
+    position: static;
+    inset: auto;
+    background: #fff;
+    padding: 0;
+    overflow: visible;
+  }
+  /* Hide the toolbar (print button, nav) - buttons/menus must not print. */
+  .decl-toolbar {
+    display: none !important;
+  }
+  .decl-sheet {
+    width: 210mm;
+    height: 297mm;
+    min-height: 297mm;
+    margin: 0;
+    box-shadow: none;
+    page-break-after: always;
+    break-after: page;
+    overflow: hidden;
+  }
+  .decl-sheet:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  /* Ensure colored bands print. */
+  .decl-header,
+  .decl-elected__bar,
+  .decl-pos__title,
+  .decl-summary__bar {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

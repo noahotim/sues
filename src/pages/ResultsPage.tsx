@@ -22,6 +22,7 @@ import {
   ErrorState,
   EmptyState,
 } from "../components/ui";
+import DeclarationDocument from "../components/DeclarationDocument";
 
 interface PositionResult {
   position: Position;
@@ -42,6 +43,8 @@ export default function ResultsPage() {
   const [voteCounts, setVoteCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // Opens the print-ready official declaration document (A4, two sheets).
+  const [showDeclaration, setShowDeclaration] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -173,275 +176,6 @@ export default function ResultsPage() {
   // results are locked while voting is in progress and appear automatically the
   // moment polls close. Admins (/admin/results) keep the live realtime preview.
   const isPublicLocked = isPublicView && !!selectedElectionId && !isElectionOver;
-
-  /** SUES-branded Declaration of Results PDF (Uganda EC format). */
-  async function downloadDeclarationForm() {
-    if (!selectedElection) return;
-    const { jsPDF } = await import("jspdf");
-    const doc = new jsPDF({ format: "a4" });
-    const W = doc.internal.pageSize.getWidth();
-    const H = doc.internal.pageSize.getHeight();
-    const M = 18;
-    let y = M;
-
-    // Attempt to load the SUES logo for the PDF header.
-    let logoDataUrl: string | null = null;
-    try {
-      const blob = await fetch("/sues-logo.jpg").then((r) => r.blob());
-      logoDataUrl = await new Promise<string>((res) => {
-        const reader = new FileReader();
-        reader.onload = () => res(String(reader.result));
-        reader.readAsDataURL(blob);
-      });
-    } catch { /* logo unavailable — text-only header */ }
-
-    // ── Header band ────────────────────────────────────────────────────
-    // Dark navy band across the full width of the page.
-    doc.setFillColor(15, 23, 42);          // primary-950
-    doc.rect(0, 0, W, 42, "F");
-
-    // Accent stripe at the very top.
-    doc.setFillColor(234, 179, 8);         // accent gold
-    doc.rect(0, 0, W, 3, "F");
-
-    // Logo inside the navy band.
-    if (logoDataUrl) {
-      doc.addImage(logoDataUrl, "JPEG", M, 8, 22, 22);
-    }
-
-    // Organisation name + subtitle inside the navy band.
-    const textX = logoDataUrl ? M + 28 : M;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.setTextColor(255, 255, 255);
-    doc.text("SOROTI UNIVERSITY", textX, 17);
-    doc.setFontSize(14);
-    doc.text("ENGINEERING SOCIETY", textX, 25);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(203, 213, 225);      // slate-300
-    doc.text("Soroti University  |  Electoral Commission", textX, 33);
-
-    // Document title centred below the navy band.
-    y = 50;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.setTextColor(15, 23, 42);
-    doc.text("DECLARATION OF RESULTS", W / 2, y, { align: "center" });
-    y += 6;
-    doc.setDrawColor(234, 179, 8);         // gold rule
-    doc.setLineWidth(0.8);
-    doc.line(M, y, W - M, y);
-    y += 10;
-
-    // ── Election details ───────────────────────────────────────────────
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(51, 65, 85);          // slate-700
-
-    const detail = (label: string, value: string) => {
-      doc.setFont("helvetica", "bold");
-      doc.text(label + ":", M, y);
-      doc.setFont("helvetica", "normal");
-      doc.text(value, M + 38, y);
-      y += 6;
-    };
-
-    detail("Election", selectedElection.title);
-    if (selectedElection.startTime)
-      detail("Poll opened", new Date(selectedElection.startTime).toLocaleString());
-    if (selectedElection.endTime)
-      detail("Poll closed", new Date(selectedElection.endTime).toLocaleString());
-    detail("Date declared", new Date().toLocaleString());
-    y += 4;
-
-    // ── Candidates declared elected ────────────────────────────────────
-    const winners = positionResults
-      .filter((pr) => pr.results.length > 0 && (pr.unopposed ? pr.affirmed : pr.results[0].votes > 0))
-      .map((pr) => {
-        const w = pr.results[0];
-        return pr.unopposed
-          ? `${pr.position.title}: ${w.candidate.name}  (${w.votes} affirm of ${participants} participants \u2014 affirmed)`
-          : `${pr.position.title}: ${w.candidate.name}  (${w.votes} vote${w.votes !== 1 ? "s" : ""})`;
-      });
-
-    // Green header bar.
-    doc.setFillColor(22, 163, 74);         // success-600
-    doc.rect(M, y, W - M * 2, 8, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(255, 255, 255);
-    doc.text("CANDIDATES DECLARED ELECTED", M + 4, y + 5.5);
-    y += 10;
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    if (winners.length) {
-      winners.forEach((w) => { doc.text(w, M + 4, y); y += 6; });
-    } else {
-      doc.text("No position has met the required threshold yet.", M + 4, y);
-      y += 6;
-    }
-    y += 6;
-
-    // ── Per-position tables ────────────────────────────────────────────
-    for (const pr of positionResults) {
-      if (y > H - 80) { doc.addPage(); y = M; }
-
-      // Position title with navy left accent.
-      doc.setFillColor(15, 23, 42);
-      doc.rect(M, y, 3, 8, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.setTextColor(15, 23, 42);
-      doc.text(pr.position.title.toUpperCase(), M + 7, y + 5.5);
-      y += 10;
-
-      const pctFor = (votes: number) =>
-        pr.unopposed && participants > 0
-          ? Math.round((votes / participants) * 100)
-          : votes > 0 && pr.totalVotes > 0
-          ? Math.round((votes / pr.totalVotes) * 100)
-          : 0;
-
-      // Table header row.
-      doc.setFillColor(241, 245, 249);     // slate-100
-      doc.rect(M, y, W - M * 2, 7, "F");
-      doc.setDrawColor(203, 213, 225);     // slate-300
-      doc.setLineWidth(0.3);
-      doc.line(M, y + 7, M + W - M * 2, y + 7);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);     // slate-500
-      doc.text("CANDIDATE", M + 3, y + 5);
-      doc.text("VOTES", M + 95, y + 5, { align: "left" });
-      doc.text("%", W - M - 3, y + 5, { align: "right" });
-      y += 7;
-
-      // Data rows.
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      for (let i = 0; i < pr.results.length; i++) {
-        const r = pr.results[i];
-        if (i % 2 === 0) {
-          doc.setFillColor(248, 250, 252); // slate-50
-          doc.rect(M, y, W - M * 2, 7, "F");
-        }
-        const isWinner = i === 0 && r.votes > 0 && (pr.unopposed ? pr.affirmed : true);
-        if (isWinner) {
-          doc.setFont("helvetica", "bold");
-        }
-        doc.setTextColor(15, 23, 42);
-        doc.text(r.candidate.name, M + 3, y + 5);
-        doc.text(String(r.votes), M + 95, y + 5, { align: "left" });
-        doc.text(`${pctFor(r.votes)}%`, W - M - 3, y + 5, { align: "right" });
-        doc.setFont("helvetica", "normal");
-        doc.setDrawColor(226, 232, 240);   // slate-200
-        doc.line(M, y + 7, M + W - M * 2, y + 7);
-        y += 7;
-      }
-
-      // Winner declaration line.
-      const wText = pr.unopposed
-        ? pr.affirmed
-          ? `AFFIRMED (unopposed, ${pctFor(pr.totalVotes)}% of participants)`
-          : "NOT AFFIRMED (unopposed, below 50% of participants)"
-        : pr.results[0] && pr.results[0].votes > 0
-          ? `${pr.results[0].candidate.name}  \u2014 DECLARED ELECTED`
-          : "No winner";
-
-      doc.setFillColor(254, 252, 232);      // yellow-50
-      doc.rect(M, y, W - M * 2, 9, "F");
-      doc.setDrawColor(234, 179, 8);        // gold border
-      doc.setLineWidth(0.4);
-      doc.rect(M, y, W - M * 2, 9, "S");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.setTextColor(146, 64, 14);        // amber-800
-      doc.text("Declared:  " + wText, M + 3, y + 6);
-      doc.setFont("helvetica", "normal");
-      y += 14;
-    }
-
-    // ── Summary of returns ─────────────────────────────────────────────
-    if (y > H - 80) { doc.addPage(); y = M; }
-    const totalVotes = Object.values(voteCounts).reduce((s, v) => s + v, 0);
-
-    doc.setFillColor(15, 23, 42);
-    doc.rect(M, y, W - M * 2, 8, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(255, 255, 255);
-    doc.text("SUMMARY OF RETURNS", M + 4, y + 5.5);
-    y += 10;
-
-    doc.setTextColor(15, 23, 42);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    const row = (label: string, value: string) => {
-      doc.setFont("helvetica", "bold");
-      doc.text(label + ":", M + 4, y);
-      doc.setFont("helvetica", "normal");
-      doc.text(value, M + 60, y);
-      y += 6;
-    };
-    row("Total valid votes cast", String(totalVotes));
-    row("Registered voters", String(roster.length));
-    row("Voters who participated", String(votersVoted));
-    row("Turnout", `${turnoutPercentage}%`);
-    row("Invalid / rejected ballots", "N/A (system records valid votes only)");
-    y += 6;
-
-    // ── Certification + signatures ─────────────────────────────────────
-    if (y > H - 80) { doc.addPage(); y = M; }
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(10);
-    doc.setTextColor(51, 65, 85);
-    doc.text(
-      "I, the Returning Officer, hereby certify that the results shown above are a true and",
-      M, y
-    );
-    doc.text(
-      "accurate record of the votes cast and counted, and I declare them accordingly.",
-      M, y + 6
-    );
-    y += 16;
-
-    const sigW = (W - M * 2 - 16) / 2;
-    const sigLine = (x: number, label: string) => {
-      doc.setDrawColor(15, 23, 42);
-      doc.setLineWidth(0.4);
-      doc.line(x, y + 24, x + sigW, y + 24);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139);
-      doc.text(label, x, y + 30);
-    };
-
-    sigLine(M, "Returning Officer");
-    sigLine(M + sigW + 16, "Candidate / Representative");
-    y += 38;
-    sigLine(M, "Observer 1");
-    sigLine(M + sigW + 16, "Observer 2");
-    y += 40;
-
-    // Footer.
-    doc.setDrawColor(234, 179, 8);
-    doc.setLineWidth(0.5);
-    doc.line(M, y, W - M, y);
-    y += 4;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(148, 163, 184);
-    doc.text(
-      "Generated by SUES Electoral Commission  |  Soroti University Engineering Society  |  " +
-        new Date().toLocaleString(),
-      M, y
-    );
-
-    doc.save(`SUES-Declaration-${selectedElection.title.replace(/[^a-z0-9]+/gi, "-")}.pdf`);
-  }
 
   async function downloadPdf() {
     if (!selectedElection) return;
@@ -591,6 +325,20 @@ export default function ResultsPage() {
   }
 
   return (
+    <>
+    {showDeclaration && selectedElection && (
+      <DeclarationDocument
+        election={selectedElection}
+        positionResults={positionResults}
+        rosterCount={roster.length}
+        participants={participants}
+        votersVoted={votersVoted}
+        turnoutPercentage={turnoutPercentage}
+        totalVotes={Object.values(voteCounts).reduce((s, v) => s + v, 0)}
+        onClose={() => setShowDeclaration(false)}
+        onPrint={() => window.print()}
+      />
+    )}
     <div className={isPublicView ? "min-h-screen bg-slate-50" : "space-y-6 animate-fade-in"}>
       {/* Public layout wrapper */}
       {isPublicView && (
@@ -639,7 +387,7 @@ export default function ResultsPage() {
         {selectedElection && positionResults.length > 0 && !isPublicLocked && (
           <div className="flex flex-col items-end gap-2 mt-4 sm:mt-0">
             {isElectionOver && (
-              <Button onClick={downloadDeclarationForm} className="!bg-success-600 hover:!bg-success-700">
+              <Button onClick={() => setShowDeclaration(true)} className="!bg-success-600 hover:!bg-success-700">
                 <FileDown size={18} />
                 Declaration of Results
               </Button>
@@ -846,5 +594,6 @@ export default function ResultsPage() {
       )}
       </div>
     </div>
+    </>
   );
 }
