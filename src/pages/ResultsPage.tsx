@@ -344,17 +344,7 @@ export default function ResultsPage() {
         totalVotes={Object.values(voteCounts).reduce((s, v) => s + v, 0)}
         onClose={() => setShowDeclaration(false)}
         onPrint={() => window.print()}
-        onDownload={() =>
-          void downloadDeclarationPdf({
-            election: selectedElection,
-            positionResults,
-            rosterCount: roster.length,
-            participants,
-            votersVoted,
-            turnoutPercentage,
-            totalVotes: Object.values(voteCounts).reduce((s, v) => s + v, 0),
-          })
-        }
+        onDownload={() => void downloadDeclarationPdf(selectedElection.title)}
       />
     )}
     {showElectoralReturn && selectedElection && (
@@ -366,15 +356,7 @@ export default function ResultsPage() {
         turnoutPercentage={turnoutPercentage}
         onClose={() => setShowElectoralReturn(false)}
         onPrint={() => window.print()}
-        onDownload={() =>
-          void downloadElectoralReturnPdf({
-            election: selectedElection,
-            positionResults,
-            rosterCount: roster.length,
-            votersVoted,
-            turnoutPercentage,
-          })
-        }
+        onDownload={() => void downloadElectoralReturnPdf(selectedElection.title)}
       />
     )}
     <div className={isPublicView ? "min-h-screen bg-slate-50" : "space-y-6 animate-fade-in"}>
