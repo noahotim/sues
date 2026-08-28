@@ -1,3 +1,5 @@
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 import declarationCss from "../declaration.css?raw";
 import electoralReturnCss from "../electoralReturn.css?raw";
 
@@ -8,6 +10,11 @@ const FONT_LINK =
 
 const IFRAME_ID = "official-document-print-frame";
 
+const PAPER: Record<string, string> = {
+  decl: "#FCFCFB",
+  er: "#FCFCFB",
+};
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -16,21 +23,22 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/* ------------------------------------------------------------------ */
+/*  PRINT DIALOG (Print / Save as PDF) — hidden iframe                 */
+/* ------------------------------------------------------------------ */
+
 /**
- * Print the official document by rendering it inside a hidden, off-screen
- * iframe (not a pop-up, so it is never blocked) and invoking the native print
- * dialog on that frame. The preview shows exactly the on-screen document and
- * "Save as PDF" produces a crisp vector PDF identical to the web view.
+ * Open the official document in a hidden off-screen iframe (never blocked as a
+ * pop-up) and invoke the native print dialog. The preview and "Save as PDF"
+ * output are a crisp vector copy identical to the on-screen document.
  */
-function printDocument(selector: string, title: string) {
-  const root = document.querySelector(selector) as HTMLElement | null;
+function printDocument(wrapperSelector: string, css: string, title: string) {
+  const root = document.querySelector(wrapperSelector) as HTMLElement | null;
   if (!root) {
-    console.warn(`[officialPdf] wrapper not found: ${selector}`);
+    console.warn(`[officialPdf] wrapper not found: ${wrapperSelector}`);
     return;
   }
-  const css = selector === ".er-doc-wrapper" ? electoralReturnCss : declarationCss;
 
-  // Reuse one hidden iframe to avoid repeated DOM churn.
   let frame = document.getElementById(IFRAME_ID) as HTMLIFrameElement | null;
   if (!frame) {
     frame = document.createElement("iframe");
@@ -71,7 +79,6 @@ function printDocument(selector: string, title: string) {
   frameDoc.write(html);
   frameDoc.close();
 
-  // Print once the frame content has settled (fonts/images).
   let printed = false;
   const doPrint = () => {
     if (printed) return;
@@ -87,12 +94,103 @@ function printDocument(selector: string, title: string) {
   setTimeout(doPrint, 1500);
 }
 
-/** Download / print the Declaration of Results document currently shown. */
-export function downloadDeclarationPdf(title: string) {
-  printDocument(".decl-doc-wrapper", title);
+/** Print dialog for the Declaration of Results (Print / Save as PDF button). */
+export function printDeclarationPdf(title: string) {
+  printDocument(".decl-doc-wrapper", declarationCss, title);
 }
 
-/** Download / print the Official Electoral Return document currently shown. */
+/** Print dialog for the Official Electoral Return (Print / Save as PDF button). */
+export function printElectoralReturnPdf(title: string) {
+  printDocument(".er-doc-wrapper", electoralReturnCss, title);
+}
+
+/* ------------------------------------------------------------------ */
+/*  TRUE DOWNLOAD (Download PDF button) — html2canvas + jsPDF          */
+/* ------------------------------------------------------------------ */
+
+/** Isolate a sheet in an off-screen host and capture it as a canvas. */
+async function captureSheet(sheet: HTMLElement, key: "decl" | "er"): Promise<HTMLCanvasElement> {
+  const clone = sheet.cloneNode(true) as HTMLElement;
+  const host = document.createElement("div");
+  host.style.cssText = [
+    "position:fixed",
+    "top:0",
+    "left:-10000px",
+    "z-index:-1",
+    "width:210mm",
+    "height:297mm",
+    "overflow:visible",
+    "background:transparent",
+    "pointer-events:none",
+  ].join(";");
+  host.appendChild(clone);
+  document.body.appendChild(host);
+  try {
+    return await html2canvas(clone, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: PAPER[key],
+      width: clone.offsetWidth,
+      height: clone.offsetHeight,
+      windowWidth: clone.offsetWidth,
+      windowHeight: clone.offsetHeight,
+    });
+  } finally {
+    host.remove();
+  }
+}
+
+/**
+ * Build a multi-page A4 PDF from every sheet in the document and trigger a
+ * real file download via the browser.
+ */
+async function downloadPdf(
+  wrapperSelector: string,
+  sheetSelector: string,
+  key: "decl" | "er",
+  filename: string,
+) {
+  const wrapper = document.querySelector(wrapperSelector) as HTMLElement | null;
+  if (!wrapper) return;
+  const sheets = Array.from(wrapper.querySelectorAll<HTMLElement>(sheetSelector));
+  if (sheets.length === 0) return;
+
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageW = 210;
+  const pageH = 297;
+
+  for (let i = 0; i < sheets.length; i++) {
+    let canvas: HTMLCanvasElement;
+    try {
+      canvas = await captureSheet(sheets[i], key);
+    } catch (err) {
+      console.warn("[officialPdf] sheet capture failed", err);
+      continue;
+    }
+    const img = canvas.toDataURL("image/jpeg", 0.92);
+    const ratio = canvas.width / canvas.height;
+    let w = pageW;
+    let h = pageW / ratio;
+    if (h > pageH) {
+      h = pageH;
+      w = pageH * ratio;
+    }
+    if (i > 0) pdf.addPage();
+    pdf.addImage(img, "JPEG", (pageW - w) / 2, (pageH - h) / 2, w, h);
+  }
+
+  pdf.save(filename);
+}
+
+/** Download the Declaration of Results as a PDF file (Download PDF button). */
+export function downloadDeclarationPdf(title: string) {
+  const safe = title.replace(/[\\/:*?"<>|]+/g, "").trim() || "Declaration-of-Results";
+  void downloadPdf(".decl-doc-wrapper", ".decl-sheet", "decl", `${safe}-Declaration-of-Results.pdf`);
+}
+
+/** Download the Official Electoral Return as a PDF file (Download PDF button). */
 export function downloadElectoralReturnPdf(title: string) {
-  printDocument(".er-doc-wrapper", title);
+  const safe = title.replace(/[\\/:*?"<>|]+/g, "").trim() || "Official-Electoral-Return";
+  void downloadPdf(".er-doc-wrapper", ".er-sheet", "er", `${safe}-Official-Electoral-Return.pdf`);
 }

@@ -27,6 +27,8 @@ import ElectoralReturnDocument from "../components/ElectoralReturnDocument";
 import {
   downloadDeclarationPdf,
   downloadElectoralReturnPdf,
+  printDeclarationPdf,
+  printElectoralReturnPdf,
 } from "../lib/officialPdf";
 
 interface PositionResult {
@@ -343,7 +345,7 @@ export default function ResultsPage() {
         turnoutPercentage={turnoutPercentage}
         totalVotes={Object.values(voteCounts).reduce((s, v) => s + v, 0)}
         onClose={() => setShowDeclaration(false)}
-        onPrint={() => void downloadDeclarationPdf(selectedElection.title)}
+        onPrint={() => void printDeclarationPdf(selectedElection.title)}
         onDownload={() => void downloadDeclarationPdf(selectedElection.title)}
       />
     )}
@@ -355,7 +357,7 @@ export default function ResultsPage() {
         votersVoted={votersVoted}
         turnoutPercentage={turnoutPercentage}
         onClose={() => setShowElectoralReturn(false)}
-        onPrint={() => void downloadElectoralReturnPdf(selectedElection.title)}
+        onPrint={() => void printElectoralReturnPdf(selectedElection.title)}
         onDownload={() => void downloadElectoralReturnPdf(selectedElection.title)}
       />
     )}
