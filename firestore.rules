@@ -182,10 +182,20 @@ service cloud.firestore {
         && request.resource.data.action in ['CAST_VOTE', 'ELECTION_CREATED', 'ELECTION_UPDATED',
              'ELECTION_DELETED', 'POSITION_CREATED', 'POSITION_UPDATED', 'POSITION_DELETED',
              'CANDIDATE_CREATED', 'CANDIDATE_UPDATED', 'CANDIDATE_DELETED',
-             'ROSTER_IMPORTED', 'VOTER_ADDED', 'VOTER_REMOVED', 'USER_ROLE_UPDATED']
+             'ROSTER_IMPORTED', 'VOTER_ADDED', 'VOTER_REMOVED', 'USER_ROLE_UPDATED',
+             'SIGN_IN_BLOCKED', 'MAINTENANCE_MODE']
         && (request.resource.data.action == 'CAST_VOTE'
             || request.resource.data.actorEmail == userEmail());
       allow update, delete: if false;
+    }
+
+    // ---------- System configuration / maintenance mode ----------
+    // A single doc the app reads WITHOUT signing in, so the login screen can
+    // show the lockout (CONTACT / administrator) even to unauthenticated and
+    // non-allowlisted users. Reading is public; writing is chairperson-only.
+    match /system_config/{docId} {
+      allow read: if true;
+      allow write: if isChairperson();
     }
 
     // ---------- Allowed-voter register (system-wide) ----------

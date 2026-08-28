@@ -6,17 +6,22 @@ import {
   CheckCircle2,
   TrendingUp,
   ClipboardList,
+  Lock,
+  LockOpen,
 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import {
   electionService,
   candidateService,
   rosterService,
+  authService,
+  type MaintenanceMode,
+  MAINTENANCE_DEFAULT_MESSAGE,
   type Election,
   type Candidate,
   type VoterRosterEntry,
 } from "../services";
-import { Card, LoadingState, ErrorState, Badge, Select } from "../components/ui";
+import { Card, LoadingState, ErrorState, Badge, Select, Button } from "../components/ui";
 
 export default function DashboardPage() {
   const { profile, role } = useAuth();
@@ -26,6 +31,30 @@ export default function DashboardPage() {
   const [roster, setRoster] = useState<VoterRosterEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [maintenance, setMaintenance] = useState<MaintenanceMode>({ enabled: false, message: MAINTENANCE_DEFAULT_MESSAGE });
+  const [maintenanceBusy, setMaintenanceBusy] = useState(false);
+
+  const isChairperson = role?.id === "ROLE_CHAIRPERSON";
+
+  // Current maintenance kill-switch (chairperson sees + can toggle it).
+  useEffect(() => {
+    if (!isChairperson) return;
+    authService.getMaintenanceMode().then((m) => {
+      if (m) setMaintenance(m);
+    });
+  }, [isChairperson]);
+
+  async function toggleMaintenance() {
+    setMaintenanceBusy(true);
+    const res = await authService.setMaintenanceMode(!maintenance.enabled);
+    setMaintenanceBusy(false);
+    if (!res.error) {
+      setMaintenance((prev) => ({
+        ...prev,
+        enabled: !prev.enabled,
+      }));
+    }
+  }
 
   // Live elections list (realtime).
   useEffect(() => {
@@ -160,6 +189,43 @@ export default function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      {/* Maintenance kill-switch (chairperson only) */}
+      {isChairperson && (
+        <Card className="p-6 rounded-sm shadow-none border-t-4 border-t-red-600">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-start gap-3">
+              {maintenance.enabled ? (
+                <Lock className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
+              ) : (
+                <LockOpen className="w-6 h-6 text-slate-400 shrink-0 mt-0.5" />
+              )}
+              <div>
+                <h2 className="text-lg font-bold text-primary-900 mb-1 uppercase tracking-widest">
+                  Maintenance Lock
+                </h2>
+                <p className="text-sm text-slate-600">
+                  {maintenance.enabled
+                    ? "The system is LOCKED. All sign-ins are denied and everyone sees the CONTACT NOAH lockout until you reopen."
+                    : "The system is open. Turn the lock ON to deny every sign-in and show the CONTACT NOAH lockout."}
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={toggleMaintenance}
+              disabled={maintenanceBusy}
+              variant={maintenance.enabled ? "danger" : "primary"}
+              className="shrink-0"
+            >
+              {maintenanceBusy
+                ? "Updating…"
+                : maintenance.enabled
+                ? "Reopen system"
+                : "Lock system (deny all sign-ins)"}
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* Recent elections */}
       <Card className="p-6 rounded-sm shadow-none">

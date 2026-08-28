@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { authService } from "../services";
+import { authService, MAINTENANCE_ERR_MARKER, MAINTENANCE_DEFAULT_MESSAGE, type MaintenanceMode } from "../services";
 import { Button, Spinner } from "../components/ui";
 
 export default function LoginPage() {
@@ -8,6 +8,15 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
+  const [maintenance, setMaintenance] = useState<MaintenanceMode>({ enabled: false, message: MAINTENANCE_DEFAULT_MESSAGE });
+
+  // Live maintenance kill-switch. When the chairperson locks the system the
+  // login screen immediately shows the CONTACT NOAH lockout and refuses entry;
+  // it recovers automatically once the lock is lifted.
+  useEffect(() => {
+    const unsub = authService.subscribeToMaintenance(setMaintenance);
+    return () => unsub();
+  }, []);
 
   // Handle the return trip when sign-in used the full-page redirect flow.
   useEffect(() => {
@@ -16,7 +25,11 @@ export default function LoginPage() {
       if (res.user) {
         navigate("/admin/dashboard", { replace: true });
       } else if (res.error) {
-        setError(res.error);
+        if (res.error.startsWith(MAINTENANCE_ERR_MARKER)) {
+          setMaintenance({ enabled: true, message: res.error.replace(MAINTENANCE_ERR_MARKER, "") });
+        } else {
+          setError(res.error);
+        }
       }
     })();
   }, [navigate]);
@@ -28,12 +41,15 @@ export default function LoginPage() {
     try {
       const { user, error, redirecting } = await authService.signInWithGoogle();
       if (redirecting) {
-        // Browser is navigating away to Google; nothing else to do here.
         setRedirecting(true);
         return;
       }
       if (error || !user) {
-        setError(error || "Authentication failed");
+        if (error && error.startsWith(MAINTENANCE_ERR_MARKER)) {
+          setMaintenance({ enabled: true, message: error.replace(MAINTENANCE_ERR_MARKER, "") });
+        } else {
+          setError(error || "Authentication failed");
+        }
         return;
       }
       navigate("/admin/dashboard", { replace: true });
@@ -42,6 +58,42 @@ export default function LoginPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // Maintenance lockout: a firm full-screen block on every sign-in attempt.
+  if (maintenance.enabled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-primary-900 p-6 relative overflow-hidden">
+        {/* hard block pattern for a DDoS-style lockdown feel */}
+        <div
+          className="absolute inset-0 opacity-10"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(45deg, #fff 0 2px, transparent 2px 14px)",
+          }}
+        />
+        <div className="w-full max-w-lg bg-white border-l-4 border-red-600 shadow-2xl p-8 text-center relative z-10">
+          <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-red-600 flex items-center justify-center">
+            <svg viewBox="0 0 24 24" className="w-9 h-9 text-white fill-current" aria-hidden>
+              <path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4Zm0 2.18 7 3.11v5.7c0 4.5-2.92 8.67-7 10-4.08-1.33-7-5.5-7-10v-5.7l7-3.11ZM11 7v6h2V7h-2Zm0 8v2h2v-2h-2Z" />
+            </svg>
+          </div>
+          <p className="text-xs font-bold tracking-[0.3em] text-red-600 uppercase mb-2">
+            Access Denied — System Locked
+          </p>
+          <h1 className="text-2xl font-extrabold text-primary-900 tracking-tight mb-3">
+            CONTACT NOAH
+          </h1>
+          <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+            {maintenance.message}
+          </p>
+          <p className="mt-4 text-xs text-slate-400">
+            Sign-in is temporarily disabled for all users. This screen will unlock
+            automatically once the administrator reopens the system.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -1,7 +1,7 @@
 import { auth, db, functions } from "../lib/firebase";
 import { collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, where, onSnapshot } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
-import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged, getAuth, User as FirebaseUser } from "firebase/auth";
 import { auditService } from "./auditService";
 
 export interface UserProfile {
@@ -22,6 +22,25 @@ export interface RegisterEntry {
   addedAt?: any;
 }
 
+// Maintenance (kill-switch) lock. When enabled, EVERY sign-in is denied —
+// including existing staff and voters — until it is turned back off.
+export interface MaintenanceMode {
+  enabled: boolean;
+  message: string;
+}
+
+// Default lock message shown on the login screen. "CONTACT NOAH" is kept
+// identical here and on the Login page so the block is unmistakable.
+export const MAINTENANCE_DEFAULT_MESSAGE =
+  "Access to this system is temporarily locked.\nCONTACT NOAH to be authorised.";
+
+export const MAINTENANCE_DOC = "maintenance";
+export const MAINTENANCE_COLLECTION = "system_config";
+
+// Sentinel that marks an error as a maintenance lockout so the login page can
+// render the full-screen lockout rather than a plain inline error.
+export const MAINTENANCE_ERR_MARKER = "__SUES_LOCKOUT__";
+
 // Guards against double-redirects (a second click would overwrite the pending
 // state and break the return trip) and memoizes result processing so the
 // redirect is consumed exactly once no matter how many components ask.
@@ -38,6 +57,16 @@ function clearRedirectPending() {
 export const authService = {
   signInWithGoogle: async (): Promise<{ user: FirebaseUser | null; error: string | null; redirecting?: boolean }> => {
     try {
+      // Maintenance kill-switch: check BEFORE opening Google so unauthorized
+      // attempts are refused immediately (and we don't even pop the chooser).
+      const maint = await authService.getMaintenanceMode();
+      if (maint?.enabled) {
+        return {
+          user: null,
+          error: MAINTENANCE_ERR_MARKER + (maint.message || MAINTENANCE_DEFAULT_MESSAGE),
+        };
+      }
+
       const provider = new GoogleAuthProvider();
       // Always show the Google account chooser, so a user can pick a DIFFERENT
       // account (e.g. when a device has several Google accounts signed in).
@@ -65,7 +94,10 @@ export const authService = {
       }
 
       const finalized = await authService.finalizeSignIn(result.user);
-      if (finalized.error) return { user: null, error: finalized.error };
+      if (finalized.error) {
+        await signOut(auth).catch(() => {});
+        return { user: null, error: finalized.error };
+      }
       return { user: result.user, error: null };
     } catch (error: any) {
       return { user: null, error: error.message };
@@ -84,7 +116,10 @@ export const authService = {
         clearRedirectPending();
         if (!result || !result.user) return { user: null, error: null };
         const finalized = await authService.finalizeSignIn(result.user);
-        if (finalized.error) return { user: null, error: finalized.error };
+        if (finalized.error) {
+          await signOut(auth).catch(() => {});
+          return { user: null, error: finalized.error };
+        }
         return { user: result.user, error: null };
       } catch (error: any) {
         clearRedirectPending();
@@ -100,6 +135,59 @@ export const authService = {
     return redirectResultPromise;
   },
 
+  /**
+   * Read the current maintenance (kill-switch) flag. Publicly readable, so it
+   * works before sign-in. Returns null if the doc is missing (system open).
+   */
+  getMaintenanceMode: async (): Promise<MaintenanceMode | null> => {
+    try {
+      const snap = await getDoc(doc(db, MAINTENANCE_COLLECTION, MAINTENANCE_DOC));
+      if (!snap.exists()) return null;
+      const data = snap.data();
+      return {
+        enabled: data.enabled === true,
+        message: typeof data.message === "string" ? data.message : MAINTENANCE_DEFAULT_MESSAGE,
+      };
+    } catch {
+      return null; // treat a read failure as "not locked" to avoid false lockouts
+    }
+  },
+
+  /** Realtime subscription to the maintenance flag (used by the login screen). */
+  subscribeToMaintenance: (callback: (mode: MaintenanceMode) => void): (() => void) => {
+    return onSnapshot(doc(db, MAINTENANCE_COLLECTION, MAINTENANCE_DOC), (snap) => {
+      if (!snap.exists()) {
+        callback({ enabled: false, message: MAINTENANCE_DEFAULT_MESSAGE });
+        return;
+      }
+      const data = snap.data();
+      callback({
+        enabled: data.enabled === true,
+        message: typeof data.message === "string" ? data.message : MAINTENANCE_DEFAULT_MESSAGE,
+      });
+    });
+  },
+
+  /**
+   * Set the maintenance kill-switch (chairperson only). Logs the change.
+   */
+  setMaintenanceMode: async (enabled: boolean, message?: string) => {
+    try {
+      const ref = doc(db, MAINTENANCE_COLLECTION, MAINTENANCE_DOC);
+      const next = {
+        enabled,
+        message: enabled && message?.trim() ? message.trim() : MAINTENANCE_DEFAULT_MESSAGE,
+        updatedAt: serverTimestamp(),
+        updatedBy: getAuth().currentUser?.email || "",
+      };
+      await setDoc(ref, next, { merge: true });
+      auditService.log("MAINTENANCE_MODE", "system", MAINTENANCE_DOC, { enabled });
+      return { error: null };
+    } catch (error: any) {
+      return { error: error.message };
+    }
+  },
+
   /** Eligibility gate + profile bootstrap shared by both sign-in methods. */
   finalizeSignIn: async (fbUser: FirebaseUser): Promise<{ ok: boolean; error: string | null }> => {
     try {
@@ -107,6 +195,26 @@ export const authService = {
       if (!email) {
         await signOut(auth);
         return { ok: false, error: "The sign-in provider did not return an email address." };
+      }
+
+      // Maintenance kill-switch: if the chairperson has locked the system, deny
+      // EVERY sign-in (staff and voters alike). Log the blocked attempt while
+      // the user is still signed in (audit rules require actorEmail), then the
+      // client signs out instead of proceeding to profile bootstrap.
+      const maint = await authService.getMaintenanceMode();
+      if (maint?.enabled) {
+        try {
+          await auditService.log("SIGN_IN_BLOCKED", "auth", email.toLowerCase(), {
+            maintenance: true,
+            message: maint.message || MAINTENANCE_DEFAULT_MESSAGE,
+          });
+        } catch {
+          /* best-effort */
+        }
+        return {
+          ok: false,
+          error: MAINTENANCE_ERR_MARKER + (maint.message || MAINTENANCE_DEFAULT_MESSAGE),
+        };
       }
 
       // Eligibility gate: staff (register entry with an admin role) OR voters
