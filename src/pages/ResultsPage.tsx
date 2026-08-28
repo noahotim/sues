@@ -343,7 +343,7 @@ export default function ResultsPage() {
         turnoutPercentage={turnoutPercentage}
         totalVotes={Object.values(voteCounts).reduce((s, v) => s + v, 0)}
         onClose={() => setShowDeclaration(false)}
-        onPrint={() => window.print()}
+        onPrint={() => void downloadDeclarationPdf(selectedElection.title)}
         onDownload={() => void downloadDeclarationPdf(selectedElection.title)}
       />
     )}
@@ -355,7 +355,7 @@ export default function ResultsPage() {
         votersVoted={votersVoted}
         turnoutPercentage={turnoutPercentage}
         onClose={() => setShowElectoralReturn(false)}
-        onPrint={() => window.print()}
+        onPrint={() => void downloadElectoralReturnPdf(selectedElection.title)}
         onDownload={() => void downloadElectoralReturnPdf(selectedElection.title)}
       />
     )}

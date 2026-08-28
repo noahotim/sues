@@ -89,7 +89,7 @@
   color: #0f172a;
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.12);
   position: relative;
-  padding: 40mm 16mm 26mm;
+  padding: 40mm 16mm 20mm;
   box-sizing: border-box;
   font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
   overflow: hidden;
@@ -155,7 +155,7 @@
 .decl-title {
   margin-top: 0;
   text-align: center;
-  padding-bottom: 5mm;
+  padding-bottom: 2mm;
   border-bottom: 1.5px solid var(--decl-gold);
 }
 .decl-title__main {
@@ -170,13 +170,13 @@
   font-weight: 600;
   color: var(--decl-slate);
   text-transform: uppercase;
-  margin-top: 3mm;
+  margin-top: 1.5mm;
   letter-spacing: 0.3px;
 }
 
 /* ---------- Section headings ---------- */
 .decl-section {
-  margin-top: 7mm;
+  margin-top: 5mm;
 }
 .decl-section__head {
   font-size: 11.5pt;
@@ -184,7 +184,7 @@
   color: var(--decl-navy);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 3mm;
+  margin-bottom: 2mm;
   display: flex;
   align-items: center;
 }
@@ -206,7 +206,7 @@
   overflow: hidden;
 }
 .decl-info__cell {
-  padding: 3.5mm 5mm;
+  padding: 2.5mm 5mm;
   border-bottom: 1px solid var(--decl-line);
   display: flex;
   align-items: baseline;
@@ -227,7 +227,7 @@
   flex-shrink: 0;
 }
 .decl-info__value {
-  font-size: 11pt;
+  font-size: 10pt;
   font-weight: 700;
   color: var(--decl-navy);
   text-transform: uppercase;
@@ -237,12 +237,12 @@
 .decl-statement {
   border: 1.5px solid var(--decl-navy);
   border-radius: 2mm;
-  padding: 5mm 6mm;
+  padding: 3mm 5mm;
   background: #f8fafc;
 }
 .decl-statement p {
   margin: 0;
-  font-size: 10pt;
+  font-size: 9.5pt;
   line-height: 1.55;
   color: var(--decl-slate);
   text-align: justify;
@@ -261,7 +261,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 3.5mm 5mm;
+  padding: 2.5mm 5mm;
   text-align: center;
 }
 .decl-elected table {
@@ -271,7 +271,7 @@
 .decl-elected th,
 .decl-elected td {
   border: 1px solid var(--decl-line);
-  padding: 3.2mm 4mm;
+  padding: 2.2mm 4mm;
   text-align: left;
   font-size: 9.5pt;
 }
@@ -298,7 +298,7 @@
 .decl-pos {
   border: 1px solid var(--decl-line);
   border-radius: 2mm;
-  margin-bottom: 4.5mm;
+  margin-bottom: 3mm;
   overflow: hidden;
 }
 .decl-pos__title {
@@ -308,10 +308,10 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  padding: 3mm 4.5mm;
+  padding: 2.5mm 4.5mm;
 }
 .decl-pos__body {
-  padding: 4mm;
+  padding: 3mm;
 }
 .decl-pos table {
   width: 100%;
@@ -320,7 +320,7 @@
 .decl-pos th,
 .decl-pos td {
   border-bottom: 1px solid var(--decl-line);
-  padding: 3mm 3.5mm;
+  padding: 2.5mm 3.5mm;
   text-align: left;
   font-size: 9.5pt;
 }
@@ -344,11 +344,11 @@
   color: var(--decl-navy);
 }
 .decl-pos__decl {
-  margin-top: 3.5mm;
+  margin-top: 2.5mm;
   background: var(--decl-green-light);
   border: 1px solid #b7e0c3;
   border-radius: 2mm;
-  padding: 3mm 4mm;
+  padding: 2.5mm 4mm;
   font-size: 9.5pt;
   font-weight: 700;
   color: var(--decl-green);
@@ -377,7 +377,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 3.5mm 5mm;
+  padding: 2.5mm 5mm;
   text-align: center;
 }
 .decl-summary table {
@@ -387,7 +387,7 @@
 .decl-summary th,
 .decl-summary td {
   border: 1px solid var(--decl-line);
-  padding: 3.2mm 5mm;
+  padding: 2.2mm 5mm;
   font-size: 9.5pt;
 }
 .decl-summary th {
@@ -410,7 +410,7 @@
   border: 1px solid var(--decl-line);
   border-left: 3mm solid var(--decl-gold);
   border-radius: 2mm;
-  padding: 5mm 6mm;
+  padding: 3mm 5mm;
   font-style: italic;
   font-size: 10.5pt;
   line-height: 1.6;
@@ -424,17 +424,17 @@
 
 /* ---------- Signatures ---------- */
 .decl-signatures {
-  margin-top: 6mm;
+  margin-top: 4mm;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12mm 10mm;
+  gap: 8mm 10mm;
 }
 .decl-sig {
   text-align: center;
 }
 .decl-sig__line {
   border-top: 1px solid var(--decl-navy);
-  padding-top: 8mm;
+  padding-top: 6mm;
 }
 .decl-sig__label {
   margin-top: 2.5mm;
@@ -480,14 +480,6 @@
   body {
     background: #fff !important;
   }
-  /* When the official declaration is open, hide the entire app around it. */
-  body:has(.decl-doc-wrapper) * {
-    visibility: hidden;
-  }
-  .decl-doc-wrapper,
-  .decl-doc-wrapper * {
-    visibility: visible;
-  }
   .decl-doc-wrapper {
     position: static;
     inset: auto;
@@ -505,13 +497,9 @@
     min-height: 297mm;
     margin: 0;
     box-shadow: none;
-    page-break-after: always;
-    break-after: page;
     overflow: hidden;
-  }
-  .decl-sheet:last-child {
-    page-break-after: auto;
-    break-after: auto;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   /* Ensure colored bands print. */
   .decl-header,

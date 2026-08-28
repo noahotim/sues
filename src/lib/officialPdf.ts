@@ -1,92 +1,73 @@
+import declarationCss from "../declaration.css?raw";
+import electoralReturnCss from "../electoralReturn.css?raw";
+
+const FONT_LINK =
+  '<link rel="preconnect" href="https://fonts.googleapis.com">' +
+  '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
+  '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">';
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 /**
- * Render the on-screen official documents (Declaration of Results & Official
- * Electoral Return) to PDF by rasterising the actual DOM sheets with html2canvas.
- * This guarantees the downloaded PDF looks identical to the web view — no blank
- * pages, no overlapping text.
+ * Open the official document in a dedicated print window containing ONLY the
+ * document markup + its stylesheet, then invoke the native print dialog.
+ * The preview shows exactly what is on screen, and "Save as PDF" produces a
+ * crisp vector PDF identical to the web view.
  */
-
-interface DownloadOptions {
-  title: string;
-  /** CSS selector for the wrapper containing the .*-sheet elements. */
-  wrapper: string;
-  /** CSS selector for each A4 sheet to rasterise. */
-  sheet: string;
-  /** Filename prefix. */
-  prefix: string;
-}
-
-async function downloadSheetsAsPdf({ title, wrapper, sheet, prefix }: DownloadOptions) {
-  const [{ jsPDF }, html2canvasMod] = await Promise.all([
-    import("jspdf"),
-    import("html2canvas"),
-  ]);
-  const JsPDF = jsPDF;
-  const html2canvas = html2canvasMod.default ?? html2canvasMod;
-
-  const root = document.querySelector(wrapper);
+function openPrintWindow(selector: string, title: string) {
+  const root = document.querySelector(selector) as HTMLElement | null;
   if (!root) {
-    console.warn(`[officialPdf] wrapper not found: ${wrapper}`);
+    console.warn(`[officialPdf] wrapper not found: ${selector}`);
     return;
   }
-  const sheets = Array.from(root.querySelectorAll(sheet)) as HTMLElement[];
-  if (sheets.length === 0) {
-    console.warn(`[officialPdf] no sheets found for selector: ${sheet}`);
+  const css = selector === ".er-doc-wrapper" ? electoralReturnCss : declarationCss;
+
+  const win = window.open("", "_blank", "noopener=no");
+  if (!win) {
+    alert("Your browser blocked the pop-up. Please allow pop-ups and try again.");
     return;
   }
 
-  const pdf = new JsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const A4_W = 210;
-  const A4_H = 297;
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(title)}</title>
+  ${FONT_LINK}
+  <style>${css}</style>
+</head>
+<body>
+  ${root.innerHTML}
+</body>
+</html>`;
 
-  for (let i = 0; i < sheets.length; i++) {
-    // Capture the sheet at its true on-screen pixel size so the PDF matches the
-    // web exactly (1:1 A4 proportions, no stretching).
-    const rect = sheets[i].getBoundingClientRect();
-    const canvas = await html2canvas(sheets[i], {
-      scale: 3,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-      logging: false,
-      width: Math.ceil(rect.width),
-      height: Math.ceil(rect.height),
-    });
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
 
-    const imgData = canvas.toDataURL("image/jpeg", 0.95);
-    const ratio = canvas.width / canvas.height;
-    // Uniform scale (preserve aspect ratio) so text is never stretched.
-    let imgW = A4_W;
-    let imgH = imgW / ratio;
-    if (imgH > A4_H) {
-      imgH = A4_H;
-      imgW = imgH * ratio;
+  // Let fonts/images settle before printing.
+  setTimeout(() => {
+    try {
+      win.print();
+    } catch {
+      /* no-op */
     }
-    const x = (A4_W - imgW) / 2;
-    const y = (A4_H - imgH) / 2;
-
-    if (i > 0) pdf.addPage();
-    pdf.addImage(imgData, "JPEG", x, y, imgW, imgH);
-  }
-
-  const safe = title.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "official-document";
-  pdf.save(`${prefix}-${safe}.pdf`);
+  }, 1500);
 }
 
-/** Download the Declaration of Results document currently shown on screen. */
+/** Download / print the Declaration of Results document currently shown. */
 export function downloadDeclarationPdf(title: string) {
-  return downloadSheetsAsPdf({
-    title,
-    wrapper: ".decl-doc-wrapper",
-    sheet: ".decl-sheet",
-    prefix: "SUES-Declaration-of-Results",
-  });
+  openPrintWindow(".decl-doc-wrapper", title);
 }
 
-/** Download the Official Electoral Return document currently shown on screen. */
+/** Download / print the Official Electoral Return document currently shown. */
 export function downloadElectoralReturnPdf(title: string) {
-  return downloadSheetsAsPdf({
-    title,
-    wrapper: ".er-doc-wrapper",
-    sheet: ".er-sheet",
-    prefix: "SUES-Official-Electoral-Return",
-  });
+  openPrintWindow(".er-doc-wrapper", title);
 }

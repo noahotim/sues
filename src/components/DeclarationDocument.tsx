@@ -33,7 +33,7 @@ function fmtStamp(t: unknown): string {
   }
   if (isNaN(d.getTime())) return "";
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} • ${p(d.getHours())}:${p(
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} \u2022 ${p(d.getHours())}:${p(
     d.getMinutes()
   )}:${p(d.getSeconds())}`;
 }
@@ -64,38 +64,38 @@ export default function DeclarationDocument({
     .map((pr) => {
       const w = pr.results[0];
       let declaration: string;
-      let kind: "ok" | "fail" | "plain" = "plain";
       if (pr.unopposed) {
         declaration = pr.affirmed ? "AFFIRMED" : "NOT AFFIRMED";
-        kind = pr.affirmed ? "ok" : "fail";
       } else if (w && w.votes > 0) {
         declaration = "DECLARED ELECTED";
-        kind = "ok";
       } else {
         declaration = "NO WINNER";
-        kind = "fail";
       }
       return {
         position: pr.position,
         candidate: w ? w.candidate : null,
         votes: w ? w.votes : 0,
         declaration,
-        kind,
       };
     });
 
-  // Page layout: page 1 gets the first 3 positions, page 2 the rest.
-  const page1Pos = positionResults.slice(0, 3);
-  const page2Pos = positionResults.slice(3);
+  // Sheet split (matches the official 4-page layout):
+  //   Sheet 1: title + info + declaration + declared table + first position
+  //   Sheet 2: positions 2-3
+  //   Sheet 3: remaining positions + summary + certification
+  //   Sheet 4: signatures + official record
+  const sheet1Pos = positionResults.slice(0, 1);
+  const sheet2Pos = positionResults.slice(1, 3);
+  const sheet3Pos = positionResults.slice(3);
 
   const posDecl = (pr: PositionResultProp) => {
     if (pr.unopposed) {
       return pr.affirmed
-        ? "✓ DECLARED: AFFIRMED — UNOPPOSED, 51%+ OF VOTES CAST"
-        : "✓ DECLARED: NOT AFFIRMED — UNOPPOSED, BELOW 51% THRESHOLD";
+        ? "\u2713 DECLARED: AFFIRMED \u2014 UNOPPOSED, 51%+ OF VOTES CAST"
+        : "\u2713 DECLARED: NOT AFFIRMED \u2014 UNOPPOSED, BELOW 51% THRESHOLD";
     }
     return pr.results[0] && pr.results[0].votes > 0
-      ? `✓ DECLARED: ${pr.results[0].candidate.name.toUpperCase()} — DECLARED ELECTED`
+      ? `\u2713 DECLARED: ${pr.results[0].candidate.name.toUpperCase()} \u2014 DECLARED ELECTED`
       : "NO WINNER";
   };
 
@@ -150,6 +150,90 @@ export default function DeclarationDocument({
     "OBSERVER 2",
   ];
 
+  const header = (
+    <div className="decl-header">
+      <div className="decl-header__gold" />
+      <img className="decl-header__logo" src="/sues-logo.jpg" alt="SUES logo" />
+      <div className="decl-header__text">
+        <span className="decl-header__org">Soroti University</span>
+        <span className="decl-header__society">Engineering Society</span>
+        <span className="decl-header__ec">Electoral Commission</span>
+      </div>
+    </div>
+  );
+
+  const titleBlock = (continued?: boolean) => (
+    <div className="decl-title">
+      <div className="decl-title__main">Official Declaration of Results</div>
+      <div className="decl-title__sub">
+        {yearLabel}
+        {continued ? " \u2014 Continued" : ""}
+      </div>
+    </div>
+  );
+
+  const footer = (page: number) => (
+    <div className="decl-footer">
+      <div className="decl-footer__gold" />
+      <div className="decl-footer__row">
+        <span className="decl-footer__org">
+          SUES Electoral Commission \u2014 Soroti University Engineering Society
+        </span>
+        <span>{nowStamp}</span>
+      </div>
+      <div className="decl-footer__row">
+        <span>Official Declaration of Results</span>
+        <span className="decl-footer__page">Page {page}</span>
+      </div>
+    </div>
+  );
+
+  const summaryBlock = (
+    <div className="decl-section">
+      <div className="decl-section__head">Summary of Returns</div>
+      <div className="decl-summary">
+        <div className="decl-summary__bar">Summary of Returns</div>
+        <table>
+          <tbody>
+            <tr>
+              <th>Total Valid Votes Cast</th>
+              <td>{totalVotes}</td>
+            </tr>
+            <tr>
+              <th>Registered Voters</th>
+              <td>{rosterCount}</td>
+            </tr>
+            <tr>
+              <th>Voters Who Participated</th>
+              <td>{votersVoted}</td>
+            </tr>
+            <tr>
+              <th>Turnout</th>
+              <td>{turnoutPercentage}%</td>
+            </tr>
+            <tr>
+              <th>Invalid / Rejected Ballots</th>
+              <td>N/A (system records valid votes only)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const certificationBlock = (
+    <div className="decl-section">
+      <div className="decl-section__head">Certification</div>
+      <div className="decl-cert">
+        <p style={{ margin: 0 }}>
+          I, the <strong>Returning Officer</strong>, hereby certify that the results shown in this
+          document are a true and accurate record of the votes cast and counted, and I declare
+          them accordingly.
+        </p>
+      </div>
+    </div>
+  );
+
   return (
     <>
       {/* ============ TOOLBAR (screen only) ============ */}
@@ -174,26 +258,11 @@ export default function DeclarationDocument({
           </div>
         </div>
 
-        {/* ============ PAGE 1 ============ */}
+        {/* ============ SHEET 1 ============ */}
         <div className="decl-sheet">
-          {/* Header band */}
-          <div className="decl-header">
-            <div className="decl-header__gold" />
-            <img className="decl-header__logo" src="/sues-logo.jpg" alt="SUES logo" />
-            <div className="decl-header__text">
-              <span className="decl-header__org">Soroti University</span>
-              <span className="decl-header__society">Engineering Society</span>
-              <span className="decl-header__ec">Electoral Commission</span>
-            </div>
-          </div>
+          {header}
+          {titleBlock()}
 
-          {/* Title */}
-          <div className="decl-title">
-            <div className="decl-title__main">Official Declaration of Results</div>
-            <div className="decl-title__sub">{yearLabel}</div>
-          </div>
-
-          {/* Election information */}
           <div className="decl-section">
             <div className="decl-section__head">Election Information</div>
             <div className="decl-info">
@@ -216,22 +285,17 @@ export default function DeclarationDocument({
             </div>
           </div>
 
-          {/* Declaration statement */}
           <div className="decl-section">
             <div className="decl-section__head">Declaration</div>
             <div className="decl-statement">
               <p>
-                This is to certify that the following are the results of the elections conducted by
-                the <strong>SUES Electoral Commission</strong> for the{" "}
-                <strong>Soroti University Engineering Society</strong>. The results herein were
-                recorded and counted in accordance with the electoral regulations, and are hereby
-                officially declared as the true and accurate outcome of the elections held under the
-                aforementioned society&rsquo;s constitution and electoral guidelines.
+                The <strong>SUES Electoral Commission</strong> hereby publishes and declares the
+                results counted by the electoral system. The candidates listed below are declared
+                elected in accordance with the society&rsquo;s electoral regulations.
               </p>
             </div>
           </div>
 
-          {/* Candidates declared elected */}
           <div className="decl-section">
             <div className="decl-section__head">Candidates Declared Elected</div>
             <div className="decl-elected">
@@ -267,94 +331,54 @@ export default function DeclarationDocument({
             </div>
           </div>
 
-          {/* Detailed results - page 1 */}
-          <div className="decl-section">
-            <div className="decl-section__head">Detailed Results</div>
-            {page1Pos.length ? page1Pos.map(renderPosition) : <p style={{ fontSize: "10pt" }}>No results yet.</p>}
-          </div>
+          {sheet1Pos.length > 0 && (
+            <div className="decl-section">
+              <div className="decl-section__head">Detailed Results</div>
+              {sheet1Pos.map(renderPosition)}
+            </div>
+          )}
 
-          {/* Footer */}
-          <div className="decl-footer">
-            <div className="decl-footer__gold" />
-            <div className="decl-footer__row">
-              <span className="decl-footer__org">SUES Electoral Commission — Soroti University Engineering Society</span>
-              <span>{nowStamp}</span>
-            </div>
-            <div className="decl-footer__row">
-              <span>Official Declaration of Results</span>
-              <span className="decl-footer__page">Page 1</span>
-            </div>
-          </div>
+          {footer(1)}
         </div>
 
-        {/* ============ PAGE 2 ============ */}
+        {/* ============ SHEET 2 ============ */}
+        {sheet2Pos.length > 0 && (
+          <div className="decl-sheet">
+            {header}
+            {titleBlock(true)}
+
+            <div className="decl-section">
+              <div className="decl-section__head">Detailed Results</div>
+              {sheet2Pos.map(renderPosition)}
+            </div>
+
+            {footer(2)}
+          </div>
+        )}
+
+        {/* ============ SHEET 3 ============ */}
         <div className="decl-sheet">
-          <div className="decl-header">
-            <div className="decl-header__gold" />
-            <img className="decl-header__logo" src="/sues-logo.jpg" alt="SUES logo" />
-            <div className="decl-header__text">
-              <span className="decl-header__org">Soroti University</span>
-              <span className="decl-header__society">Engineering Society</span>
-              <span className="decl-header__ec">Electoral Commission</span>
+          {header}
+          {titleBlock(true)}
+
+          {sheet3Pos.length > 0 && (
+            <div className="decl-section">
+              <div className="decl-section__head">Detailed Results</div>
+              {sheet3Pos.map(renderPosition)}
             </div>
-          </div>
+          )}
 
-          <div className="decl-title">
-            <div className="decl-title__main">Official Declaration of Results</div>
-            <div className="decl-title__sub">{yearLabel} — Continued</div>
-          </div>
+          {summaryBlock}
+          {certificationBlock}
 
-          {/* Detailed results - remaining positions */}
-          <div className="decl-section">
-            <div className="decl-section__head">Detailed Results</div>
-            {page2Pos.length ? page2Pos.map(renderPosition) : <p style={{ fontSize: "10pt" }}>No further positions.</p>}
-          </div>
+          {footer(3)}
+        </div>
 
-          {/* Summary of returns */}
-          <div className="decl-section">
-            <div className="decl-section__head">Summary of Returns</div>
-            <div className="decl-summary">
-              <div className="decl-summary__bar">Summary of Returns</div>
-              <table>
-                <tbody>
-                  <tr>
-                    <th>Total Valid Votes Cast</th>
-                    <td>{totalVotes}</td>
-                  </tr>
-                  <tr>
-                    <th>Registered Voters</th>
-                    <td>{rosterCount}</td>
-                  </tr>
-                  <tr>
-                    <th>Voters Who Participated</th>
-                    <td>{votersVoted}</td>
-                  </tr>
-                  <tr>
-                    <th>Turnout</th>
-                    <td>{turnoutPercentage}%</td>
-                  </tr>
-                  <tr>
-                    <th>Invalid / Rejected Ballots</th>
-                    <td>N/A (system records valid votes only)</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+        {/* ============ SHEET 4 ============ */}
+        <div className="decl-sheet">
+          {header}
+          {titleBlock(true)}
 
-          {/* Certification */}
-          <div className="decl-section">
-            <div className="decl-section__head">Certification</div>
-            <div className="decl-cert">
-              <p style={{ margin: 0 }}>
-                I, the <strong>Returning Officer</strong>, hereby certify that the results shown in
-                this document are a true and accurate record of the votes cast and counted, and I
-                declare them accordingly.
-              </p>
-            </div>
-          </div>
-
-          {/* Signatures */}
           <div className="decl-signatures">
             {signatures.map((label) => (
               <div className="decl-sig" key={label}>
@@ -364,18 +388,18 @@ export default function DeclarationDocument({
             ))}
           </div>
 
-          {/* Footer */}
-          <div className="decl-footer">
-            <div className="decl-footer__gold" />
-            <div className="decl-footer__row">
-              <span className="decl-footer__org">SUES Electoral Commission — Soroti University Engineering Society</span>
-              <span>{nowStamp}</span>
-            </div>
-            <div className="decl-footer__row">
-              <span>Official Declaration of Results</span>
-              <span className="decl-footer__page">Page 2</span>
+          <div className="decl-section">
+            <div className="decl-section__head">Official Record</div>
+            <div className="decl-cert" style={{ fontStyle: "normal" }}>
+              <p style={{ margin: 0 }}>
+                Generated by the <strong>SUES Electoral Commission</strong> — Soroti University
+                Engineering Society. This document presents the published declaration of results as
+                recorded by the electoral system.
+              </p>
             </div>
           </div>
+
+          {footer(4)}
         </div>
       </div>
     </>

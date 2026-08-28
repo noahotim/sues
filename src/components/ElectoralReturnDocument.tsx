@@ -239,7 +239,7 @@ export default function ElectoralReturnDocument({
             </>
           )}
 
-          <div className="er-sec" style={{ marginTop: "7mm" }}>
+          <div className="er-sec" style={{ marginTop: "4mm" }}>
             <div className="er-bar er-bar--navy">Turnout &amp; Election Integrity</div>
             <div className="er-summary" style={{ marginTop: "0mm" }}>
               <table>
@@ -265,7 +265,7 @@ export default function ElectoralReturnDocument({
             </div>
           </div>
 
-          <div className="er-sec" style={{ marginTop: "5mm" }}>
+          <div className="er-sec" style={{ marginTop: "3mm" }}>
             <div className="er-notice">
               <div className="er-notice__head">Election Integrity Notice</div>
               <p>
@@ -274,7 +274,7 @@ export default function ElectoralReturnDocument({
             </div>
           </div>
 
-          <div className="er-sec" style={{ marginTop: "7mm" }}>
+          <div className="er-sec" style={{ marginTop: "4mm" }}>
             <div className="er-bar er-bar--navy">Official Record</div>
             <div className="er-record er-summary" style={{ marginTop: 0 }}>
               <p style={{ padding: "4mm 5mm" }}>

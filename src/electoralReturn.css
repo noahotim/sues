@@ -160,7 +160,7 @@
 /* ---------- Title ---------- */
 .er-title {
   text-align: center;
-  padding-bottom: 5mm;
+  padding-bottom: 2mm;
   border-bottom: 1.5px solid #c89b2c;
 }
 .er-title__main {
@@ -175,7 +175,7 @@
   font-weight: 700;
   color: #334155;
   text-transform: uppercase;
-  margin-top: 2.5mm;
+  margin-top: 1.5mm;
   letter-spacing: 0.3px;
 }
 
@@ -227,7 +227,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 3mm 5mm;
+  padding: 2.5mm 5mm;
   border-radius: 1mm;
 }
 .er-bar--navy {
@@ -393,7 +393,7 @@
 }
 .er-summary th,
 .er-summary td {
-  padding: 3.4mm 5mm;
+  padding: 2.4mm 5mm;
   border: 1px solid #d6dce5;
   text-align: left;
   font-size: 9.5pt;
@@ -483,13 +483,6 @@
   body {
     background: #fff !important;
   }
-  body:has(.er-doc-wrapper) * {
-    visibility: hidden;
-  }
-  .er-doc-wrapper,
-  .er-doc-wrapper * {
-    visibility: visible;
-  }
   .er-doc-wrapper {
     position: static;
     inset: auto;
@@ -506,13 +499,9 @@
     min-height: 297mm;
     margin: 0;
     box-shadow: none;
-    page-break-after: always;
-    break-after: page;
     overflow: hidden;
-  }
-  .er-sheet:last-child {
-    page-break-after: auto;
-    break-after: auto;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .er-header,
   .er-header__gold,
