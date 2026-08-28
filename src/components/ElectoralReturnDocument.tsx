@@ -230,8 +230,6 @@ export default function ElectoralReturnDocument({
             <div className="er-title__sub">{electionLabel} — Continued</div>
           </div>
 
-          <div className="er-page-body er-page-body--balance">
-
           {page2Pos.length > 0 && (
             <>
               <div className="er-bar">Official Results</div>
@@ -287,8 +285,6 @@ export default function ElectoralReturnDocument({
                 information shown above.
               </p>
             </div>
-          </div>
-
           </div>
 
           {footer(2)}

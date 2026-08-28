@@ -304,8 +304,6 @@ export default function DeclarationDocument({
             <div className="decl-title__sub">{yearLabel} — Continued</div>
           </div>
 
-          <div className="decl-page-body decl-page-body--balance">
-
           {/* Detailed results - remaining positions */}
           <div className="decl-section">
             <div className="decl-section__head">Detailed Results</div>
@@ -364,8 +362,6 @@ export default function DeclarationDocument({
                 <div className="decl-sig__label">{label}</div>
               </div>
             ))}
-          </div>
-
           </div>
 
           {/* Footer */}
