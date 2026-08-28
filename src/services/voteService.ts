@@ -42,20 +42,33 @@ export const voteService = {
    * Record a COMPLETE ballot - every position in an election - in a single
    * confirmation. votesByPosition maps each positionId to the chosen candidate.
    *
-   * Steps per position (atomic once-only):
+   * Steps per VOTED position (atomic once-only):
    *   1. claim vote_receipts/{email}__{election}__{position}   (deterministic id)
    *   2. create votes/{nonce} (anonymous ballot)
    * Positions the voter already completed are skipped and not re-counted.
-   * Only when EVERY position is cast is the voter marked fully voted (hasVoted).
+   *
+   * Unopposed positions may be ABSTAINED instead of voted: abstainedPositionIds
+   * marks them as "resolved" on the roster (so the ballot counts as submitted
+   * and the position is not left silently hanging) but records NO anonymous
+   * vote - the voter declines to affirm. Those abstainers therefore count as
+   * not-affirming in the 51% confidence test.
+   * Only when EVERY position is resolved (voted or abstained) is the voter
+   * marked fully voted (hasVoted) / participating.
    */
-  submitBallot: async (electionId: string, votesByPosition: Record<string, string>) => {
+  submitBallot: async (
+    electionId: string,
+    votesByPosition: Record<string, string>,
+    abstainedPositionIds: string[] = []
+  ) => {
     try {
       const user = getAuth().currentUser;
       if (!user || !user.email) return { error: "You must be signed in to vote." };
       const email = user.email.toLowerCase();
 
       const positionIds = Object.keys(votesByPosition).filter((p) => votesByPosition[p]);
-      if (positionIds.length === 0) return { error: "Select a candidate for each position before submitting." };
+      if (positionIds.length === 0 && abstainedPositionIds.length === 0) {
+        return { error: "Select a candidate or decline each position before submitting." };
+      }
 
       // Pre-flight checks in parallel so voters get precise feedback instead of
       // a generic permission error. The atomic rules remain the final authority.
@@ -93,6 +106,29 @@ export const voteService = {
         query(collection(db, "positions"), where("electionId", "==", electionId))
       );
       const totalPositions = posSnap.docs.length;
+
+      // Abstention is only ever allowed on UNOPPOSED positions (exactly one
+      // candidate) - a voter may withhold their vote of confidence there. If
+      // they try to abstain on a contested position, force a real selection.
+      if (abstainedPositionIds.length > 0) {
+        const [posIdSet, candSnap] = [
+          new Set(posSnap.docs.map((d) => d.id)),
+          await getDocs(
+            query(collection(db, "candidates"), where("electionId", "==", electionId))
+          ),
+        ];
+        const countsByPos: Record<string, number> = {};
+        candSnap.docs.forEach((d) => {
+          const pid = d.data().positionId;
+          countsByPos[pid] = (countsByPos[pid] || 0) + 1;
+        });
+        const invalid = abstainedPositionIds.filter(
+          (pid) => !posIdSet.has(pid) || (countsByPos[pid] || 0) !== 1
+        );
+        if (invalid.length > 0) {
+          return { error: "You may only decline confidence on unopposed positions." };
+        }
+      }
 
       let recorded = 0;
       let already = 0;
@@ -149,12 +185,17 @@ export const voteService = {
         const prevVoted: string[] = Array.isArray(rosterSnap.data()?.votedPositions)
           ? rosterSnap.data()!.votedPositions
           : [];
-        const votedNow = Array.from(new Set([...prevVoted, ...recordedPositions]));
-        const allVoted = totalPositions > 0 && votedNow.length >= totalPositions;
+        const resolvedNow = Array.from(
+          new Set([...prevVoted, ...recordedPositions, ...abstainedPositionIds])
+        );
+        const allVoted = totalPositions > 0 && resolvedNow.length >= totalPositions;
 
         const patch: Record<string, unknown> = {
-          votedPositions: votedNow,
-          // Only write hasVoted when the full ballot is complete.
+          // votedPositions now means "positions the voter RESOLVED" - voted or
+          // abstained - so an abstained unopposed position is not left dangling
+          // and the voter still counts as having participated.
+          votedPositions: resolvedNow,
+          // Only write hasVoted when every position in the ballot is resolved.
           ...(allVoted ? { hasVoted: true } : {}),
         };
         await setDoc(rosterRef, patch, { merge: true });

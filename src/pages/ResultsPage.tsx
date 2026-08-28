@@ -125,6 +125,12 @@ export default function ResultsPage() {
   const votersVoted = roster.filter((r) => r.hasVoted).length;
   const turnoutPercentage =
     roster.length > 0 ? Math.round((votersVoted / roster.length) * 100) : 0;
+  // Everyone who RESOLVED a ballot (voted or abstained) = participants. For an
+  // unopposed position the confidence test is affirm / participants, so a
+  // participant who abstained (declined confidence) counts against affirmation.
+  const participants = roster.filter(
+    (r) => r.hasVoted || (r.votedPositions && r.votedPositions.length > 0)
+  ).length;
 
   const positionResults: PositionResult[] = positions
     .map((pos) => {
@@ -135,10 +141,13 @@ export default function ResultsPage() {
       );
       const unopposed = posCandidates.length === 1;
       const single = posCandidates[0];
-      const singlePct = unopposed && single && posVotes > 0
-        ? ((voteCounts[single.id] ?? 0) / posVotes) * 100
+      // Affirmation requires the candidate to win a vote of confidence from
+      // MORE THAN 50% of all participants who submitted a ballot. Abstainers
+      // (declined confidence) count as not affirming.
+      const affirmPct = unopposed && single && participants > 0
+        ? ((voteCounts[single.id] ?? 0) / participants) * 100
         : 0;
-      const affirmed = unopposed && singlePct >= 51;
+      const affirmed = unopposed && affirmPct > 50;
       const results = posCandidates
         .map((c) => ({
           candidate: c,
@@ -251,7 +260,9 @@ export default function ResultsPage() {
       .filter((pr) => pr.results.length > 0 && (pr.unopposed ? pr.affirmed : pr.results[0].votes > 0))
       .map((pr) => {
         const w = pr.results[0];
-        return `${pr.position.title}: ${w.candidate.name}  (${w.votes} vote${w.votes !== 1 ? "s" : ""}${pr.unopposed ? "  \u2014 affirmed" : ""})`;
+        return pr.unopposed
+          ? `${pr.position.title}: ${w.candidate.name}  (${w.votes} affirm of ${participants} participants \u2014 affirmed)`
+          : `${pr.position.title}: ${w.candidate.name}  (${w.votes} vote${w.votes !== 1 ? "s" : ""})`;
       });
 
     // Green header bar.
@@ -287,6 +298,13 @@ export default function ResultsPage() {
       doc.text(pr.position.title.toUpperCase(), M + 7, y + 5.5);
       y += 10;
 
+      const pctFor = (votes: number) =>
+        pr.unopposed && participants > 0
+          ? Math.round((votes / participants) * 100)
+          : votes > 0 && pr.totalVotes > 0
+          ? Math.round((votes / pr.totalVotes) * 100)
+          : 0;
+
       // Table header row.
       doc.setFillColor(241, 245, 249);     // slate-100
       doc.rect(M, y, W - M * 2, 7, "F");
@@ -317,7 +335,7 @@ export default function ResultsPage() {
         doc.setTextColor(15, 23, 42);
         doc.text(r.candidate.name, M + 3, y + 5);
         doc.text(String(r.votes), M + 95, y + 5, { align: "left" });
-        doc.text(`${r.percentage}%`, W - M - 3, y + 5, { align: "right" });
+        doc.text(`${pctFor(r.votes)}%`, W - M - 3, y + 5, { align: "right" });
         doc.setFont("helvetica", "normal");
         doc.setDrawColor(226, 232, 240);   // slate-200
         doc.line(M, y + 7, M + W - M * 2, y + 7);
@@ -327,8 +345,8 @@ export default function ResultsPage() {
       // Winner declaration line.
       const wText = pr.unopposed
         ? pr.affirmed
-          ? "AFFIRMED (unopposed, 51%+ of votes cast)"
-          : "NOT AFFIRMED (unopposed, below 51% threshold)"
+          ? `AFFIRMED (unopposed, ${pctFor(pr.totalVotes)}% of participants)`
+          : "NOT AFFIRMED (unopposed, below 50% of participants)"
         : pr.results[0] && pr.results[0].votes > 0
           ? `${pr.results[0].candidate.name}  \u2014 DECLARED ELECTED`
           : "No winner";
@@ -489,28 +507,44 @@ export default function ResultsPage() {
 
       doc.setFontSize(10);
       for (const r of results) {
-        const pct = totalVotes > 0 ? Math.round((r.votes / totalVotes) * 100) : 0;
+        // Unopposed: show the confidence % against ALL participants (abstainers
+        // count against affirmation). Contested: share of the position's votes.
+        const pct = unopposed
+          ? participants > 0
+            ? Math.round((r.votes / participants) * 100)
+            : 0
+          : totalVotes > 0
+          ? Math.round((r.votes / totalVotes) * 100)
+          : 0;
         doc.setFontSize(10);
         doc.text(`${r.candidate.name}`, margin, y);
-        doc.text(`${r.votes} vote(s) - ${pct}%`, width - margin, y, { align: "right" });
+        doc.text(`${r.votes} ${unopposed ? "affirm" : "vote(s)"} - ${pct}%`, width - margin, y, { align: "right" });
         // bar
         const barMax = width - margin * 2;
-        const barLen = Math.max(0, Math.min(barMax, (barMax * r.votes) / (totalVotes || 1)));
+        const barLen = Math.max(0, Math.min(barMax, (barMax * r.votes) / (unopposed ? (participants || 1) : (totalVotes || 1))));
         doc.setFillColor(15, 23, 42);
         doc.rect(margin, y + 2.5, barLen, 2, "F");
         doc.setFillColor(22, 163, 74);
         doc.rect(margin + barLen, y + 2.5, Math.max(0, barMax - barLen), 2, "F");
         y += 9;
       }
-      doc.text(`Position total: ${totalVotes} vote(s)`, margin, y + 2);
+      doc.text(
+        unopposed
+          ? `Affirmations: ${totalVotes} of ${participants} participants (${
+              participants > 0 ? Math.round((totalVotes / participants) * 100) : 0
+            }%)`
+          : `Position total: ${totalVotes} vote(s)`,
+        margin,
+        y + 2
+      );
       y += 6;
       if (unopposed) {
         doc.setFontSize(9);
         doc.setTextColor(180, 83, 9);
         doc.text(
           affirmed
-            ? `Unopposed candidate AFFIRMED (>= 51% of votes cast).`
-            : `Unopposed candidate NOT affirmed (below the 51% threshold).`,
+            ? `Unopposed candidate AFFIRMED (majority vote of confidence, >50% of participants).`
+            : `Unopposed candidate NOT affirmed (below the 50% confidence threshold).`,
           margin,
           y + 5
         );
@@ -720,12 +754,24 @@ export default function ResultsPage() {
                       )}
                       {unopposed && (
                         <p className="text-xs text-slate-500 mt-1">
-                          Unopposed nomination — requires <strong>at least 51%</strong> of votes cast
-                          to be affirmed.
+                          Unopposed nomination — requires <strong>more than 50%</strong> of all
+                          participants to affirm (abstentions count against it).
                         </p>
                       )}
                     </div>
-                    <Badge variant="neutral">{totalVotes} vote{totalVotes !== 1 ? "s" : ""}</Badge>
+                    {unopposed ? (
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant={affirmed ? "success" : "warning"}>
+                          {affirmed ? "Affirmed" : "Not affirmed"}
+                        </Badge>
+                        <span className="text-xs text-slate-500">
+                          {totalVotes} of {participants} affirm (
+                          {participants > 0 ? Math.round((totalVotes / participants) * 100) : 0}%)
+                        </span>
+                      </div>
+                    ) : (
+                      <Badge variant="neutral">{totalVotes} vote{totalVotes !== 1 ? "s" : ""}</Badge>
+                    )}
                   </div>
 
                   {results.length === 0 ? (
@@ -742,19 +788,28 @@ export default function ResultsPage() {
                               <span className="text-sm font-medium text-slate-900">
                                 {r.candidate.name}
                               </span>
-                              {unopposed && idx === 0 && affirmed && (
-                                <Badge variant="success">Affirmed</Badge>
-                              )}
-                              {unopposed && idx === 0 && !affirmed && (
-                                <Badge variant="warning">Not affirmed</Badge>
-                              )}
                             </div>
-                            <div className="flex items-center gap-3 text-sm">
-                              <span className="text-slate-600">{r.votes} vote{r.votes !== 1 ? "s" : ""}</span>
-                              <span className="font-semibold text-slate-900 w-12 text-right">
-                                {r.percentage}%
-                              </span>
-                            </div>
+                            {unopposed ? (
+                              <div className="flex items-center gap-3 text-sm">
+                                <span className="text-slate-600">{r.votes} affirm</span>
+                                <span className="text-slate-400">
+                                  {participants - r.votes} abstain
+                                </span>
+                                <span className="font-semibold text-slate-900 w-12 text-right">
+                                  {participants > 0
+                                    ? Math.round((r.votes / participants) * 100)
+                                    : 0}
+                                  %
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-3 text-sm">
+                                <span className="text-slate-600">{r.votes} vote{r.votes !== 1 ? "s" : ""}</span>
+                                <span className="font-semibold text-slate-900 w-12 text-right">
+                                  {r.percentage}%
+                                </span>
+                              </div>
+                            )}
                           </div>
                           <div className="h-3 rounded-sm bg-slate-100 overflow-hidden mt-1">
                             <div
@@ -763,15 +818,22 @@ export default function ResultsPage() {
                                   ? "bg-success-600"
                                   : "bg-primary-900"
                               }`}
-                              style={{ width: `${Math.min(100, r.percentage)}%` }}
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  unopposed && participants > 0
+                                    ? (r.votes / participants) * 100
+                                    : r.percentage
+                                )}%`,
+                              }}
                             />
                           </div>
                         </div>
                       ))}
                       {unopposed && !affirmed && (
                         <p className="text-xs text-warning-700 bg-warning-50 border border-warning-200 rounded-sm px-3 py-2">
-                          This candidate received below the 51% threshold — the nomination is
-                          <strong> not affirmed</strong>.
+                          This candidate did not secure a majority vote of confidence — the
+                          nomination is <strong>not affirmed</strong>.
                         </p>
                       )}
                     </div>

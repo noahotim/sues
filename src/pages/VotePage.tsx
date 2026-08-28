@@ -38,6 +38,9 @@ export default function VotePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [selections, setSelections] = useState<Record<string, string>>({});
+  // For unopposed positions the voter may withhold their vote of confidence
+  // (abstain) instead of affirming. Keyed by `${electionId}:${positionId}`.
+  const [abstained, setAbstained] = useState<Record<string, boolean>>({});
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   // Live clock: re-evaluated every second so polls open/close STRICTLY at the
@@ -185,32 +188,45 @@ export default function VotePage() {
       return;
     }
 
-    // Every position that still needs a vote must have exactly one selection.
+    // Every position that still needs a response must either be ticked (voted)
+    // or - if unopposed - explicitly declined (abstained, no confidence).
     const pendingPositions = section.positions.filter((p) => !section.votedPositions.has(p.id));
     if (pendingPositions.length === 0) {
       setSubmitError("You have already submitted your ballot for this election.");
       return;
     }
+    const isUnopposed = (pid: string) =>
+      section.candidates.filter((c) => c.positionId === pid).length === 1;
+
     const votesByPosition: Record<string, string> = {};
-    const missing = pendingPositions.filter(
-      (p) => !selections[`${electionId}:${p.id}`]
-    );
+    const abstainedPositions: string[] = [];
+    const missing: typeof pendingPositions = [];
+
+    for (const p of pendingPositions) {
+      const key = `${electionId}:${p.id}`;
+      const choice = selections[key];
+      if (choice) {
+        votesByPosition[p.id] = choice;
+      } else if (isUnopposed(p.id) && abstained[key]) {
+        // Declined to affirm an unopposed candidate - abstain, no vote recorded.
+        abstainedPositions.push(p.id);
+      } else {
+        missing.push(p);
+      }
+    }
     if (missing.length > 0) {
       setSubmitError(
-        `Please tick one candidate for every position before submitting. Missing: ${missing
+        `Please tick a candidate - or decline confidence on unopposed positions - before submitting. Missing: ${missing
           .map((p) => p.title)
           .join(", ")}`
       );
       return;
     }
-    for (const p of pendingPositions) {
-      votesByPosition[p.id] = selections[`${electionId}:${p.id}`];
-    }
 
     setSubmittingKey(electionId);
     setSubmitError(null);
     try {
-      const res = await voteService.submitBallot(electionId, votesByPosition);
+      const res = await voteService.submitBallot(electionId, votesByPosition, abstainedPositions);
       if (res.error) {
         setSubmitError(res.error);
         return;
@@ -491,52 +507,87 @@ export default function VotePage() {
                             <>
                               <div className="bg-warning-50 border border-warning-200 rounded-sm px-3 py-2 mb-3">
                                 <p className="text-xs text-warning-700">
-                                  This position is <strong>unopposed</strong>. Casting your vote affirms
-                                  the nomination (at least 51% is required to confirm).
+                                  This position is <strong>unopposed</strong>. You may <strong>affirm</strong>{" "}
+                                  the candidate (a vote of confidence - a majority of participants is
+                                  required to confirm) or <strong>decline confidence</strong> by abstaining.
                                 </p>
                               </div>
-                              <div className="space-y-2">
-                                {positionCandidates.map((cand) => (
-                                  <label
-                                    key={cand.id}
-                                    className={`flex items-start gap-4 p-4 rounded-sm border-2 cursor-pointer transition-all ${
-                                      selected === cand.id
-                                        ? "border-primary-900 bg-primary-50"
-                                        : "border-slate-200 hover:border-slate-300"
-                                    }`}
-                                  >
-                                    <input
-                                      type="radio"
-                                      name={key}
-                                      value={cand.id}
-                                      checked={selected === cand.id}
-                                      onChange={() =>
-                                        setSelections((prev) => ({ ...prev, [key]: cand.id }))
-                                      }
-                                      className="mt-1 accent-primary-900 w-4 h-4"
+                              {positionCandidates.map((cand) => (
+                                <label
+                                  key={cand.id}
+                                  className={`flex items-start gap-4 p-4 rounded-sm border-2 cursor-pointer transition-all mb-2 ${
+                                    selected === cand.id
+                                      ? "border-primary-900 bg-primary-50"
+                                      : "border-slate-200 hover:border-slate-300"
+                                  }`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`affirm-${key}`}
+                                    value={cand.id}
+                                    checked={selected === cand.id}
+                                    onChange={() => {
+                                      setSelections((prev) => ({ ...prev, [key]: cand.id }));
+                                      setAbstained((prev) => ({ ...prev, [key]: false }));
+                                    }}
+                                    className="mt-1 accent-primary-900 w-4 h-4"
+                                  />
+                                  {cand.photoUrl ? (
+                                    <img
+                                      src={cand.photoUrl}
+                                      alt={cand.name}
+                                      className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                                     />
-                                    {cand.photoUrl ? (
-                                      <img
-                                        src={cand.photoUrl}
-                                        alt={cand.name}
-                                        className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-                                      />
-                                    ) : (
-                                      <div className="w-12 h-12 bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
-                                        <span className="text-slate-500 font-semibold text-lg">
-                                          {cand.name.charAt(0).toUpperCase()}
-                                        </span>
-                                      </div>
-                                    )}
-                                    <div className="flex-1">
-                                      <p className="font-bold text-slate-900 text-base">{cand.name}</p>
-                                      {cand.bio && (
-                                        <p className="text-sm text-slate-600 mt-1 leading-relaxed">{cand.bio}</p>
-                                      )}
+                                  ) : (
+                                    <div className="w-12 h-12 bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
+                                      <span className="text-slate-500 font-semibold text-lg">
+                                        {cand.name.charAt(0).toUpperCase()}
+                                      </span>
                                     </div>
-                                  </label>
-                                ))}
-                              </div>
+                                  )}
+                                  <div className="flex-1">
+                                    <p className="font-bold text-slate-900 text-base">{cand.name}</p>
+                                    {cand.bio && (
+                                      <p className="text-sm text-slate-600 mt-1 leading-relaxed">{cand.bio}</p>
+                                    )}
+                                    <span className="inline-block mt-1 text-xs font-semibold text-success-700 uppercase tracking-wide">
+                                      Affirm - vote of confidence
+                                    </span>
+                                  </div>
+                                </label>
+                              ))}
+                              <label
+                                className={`flex items-center gap-3 p-4 rounded-sm border-2 cursor-pointer transition-all ${
+                                  abstained[key] && !selected
+                                    ? "border-slate-400 bg-slate-50"
+                                    : "border-slate-200 hover:border-slate-300"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!!abstained[key]}
+                                  onChange={(e) => {
+                                    const v = e.target.checked;
+                                    setAbstained((prev) => ({ ...prev, [key]: v }));
+                                    if (v) {
+                                      // Declining unselects the candidate affirm.
+                                      setSelections((prev) => {
+                                        const next = { ...prev };
+                                        delete next[key];
+                                        return next;
+                                      });
+                                    }
+                                  }}
+                                  className="accent-slate-700 w-4 h-4"
+                                />
+                                <div>
+                                  <p className="text-sm font-bold text-slate-700">Decline confidence (abstain)</p>
+                                  <p className="text-xs text-slate-500 mt-0.5">
+                                    I do not wish to affirm this candidate. No vote is recorded and this
+                                    counts against the majority affirmation threshold.
+                                  </p>
+                                </div>
+                              </label>
                             </>
                           ) : (
                             <>
@@ -598,10 +649,19 @@ export default function VotePage() {
                     b.election.endTime && new Date(b.election.endTime).getTime() < now;
                   if (b.eligible && b.positions.length > 0 && !notStarted && !closed) {
                     const pendingCount = b.positions.filter((p) => !b.votedPositions.has(p.id)).length;
+                    const isUnopposed = (pid: string) =>
+                      b.candidates.filter((c) => c.positionId === pid).length === 1;
+                    // Every pending position is satisfied by a selection, OR by
+                    // an explicit abstention when it is unopposed.
                     const ready =
-                      b.positions.every(
-                        (p) => b.votedPositions.has(p.id) || selections[`${b.election.id}:${p.id}`]
-                      ) && pendingCount > 0;
+                      b.positions.every((p) => {
+                        const key = `${b.election.id}:${p.id}`;
+                        return (
+                          b.votedPositions.has(p.id) ||
+                          !!selections[key] ||
+                          (isUnopposed(p.id) && !!abstained[key])
+                        );
+                      }) && pendingCount > 0;
                     const submitting = submittingKey === b.election.id;
                     const allDone = pendingCount === 0;
                     return (
@@ -621,8 +681,8 @@ export default function VotePage() {
                             <p className="text-sm text-slate-600">
                               {pendingCount} position{pendingCount > 1 ? "s" : ""} remaining.{" "}
                               {ready
-                                ? "Your selections are ready to submit."
-                                : "Tick one candidate for every position to enable submission."}
+                                ? "Your choices are ready to submit."
+                                : "Tick a candidate (or decline unopposed positions) to enable submission."}
                             </p>
                             <Button
                               onClick={() => handleSubmitBallot(b.election.id)}
