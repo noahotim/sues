@@ -23,6 +23,7 @@ import {
   EmptyState,
 } from "../components/ui";
 import DeclarationDocument from "../components/DeclarationDocument";
+import ElectoralReturnDocument from "../components/ElectoralReturnDocument";
 
 interface PositionResult {
   position: Position;
@@ -45,6 +46,8 @@ export default function ResultsPage() {
   const [error, setError] = useState(false);
   // Opens the print-ready official declaration document (A4, two sheets).
   const [showDeclaration, setShowDeclaration] = useState(false);
+  // Opens the print-ready official electoral return (A4, two sheets).
+  const [showElectoralReturn, setShowElectoralReturn] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -339,6 +342,17 @@ export default function ResultsPage() {
         onPrint={() => window.print()}
       />
     )}
+    {showElectoralReturn && selectedElection && (
+      <ElectoralReturnDocument
+        election={selectedElection}
+        positionResults={positionResults}
+        rosterCount={roster.length}
+        votersVoted={votersVoted}
+        turnoutPercentage={turnoutPercentage}
+        onClose={() => setShowElectoralReturn(false)}
+        onPrint={() => window.print()}
+      />
+    )}
     <div className={isPublicView ? "min-h-screen bg-slate-50" : "space-y-6 animate-fade-in"}>
       {/* Public layout wrapper */}
       {isPublicView && (
@@ -390,6 +404,12 @@ export default function ResultsPage() {
               <Button onClick={() => setShowDeclaration(true)} className="!bg-success-600 hover:!bg-success-700">
                 <FileDown size={18} />
                 Declaration of Results
+              </Button>
+            )}
+            {isElectionOver && (
+              <Button onClick={() => setShowElectoralReturn(true)} variant="secondary">
+                <FileDown size={18} />
+                Official Electoral Return
               </Button>
             )}
             <Button onClick={downloadPdf} variant={isElectionOver ? "secondary" : undefined}>

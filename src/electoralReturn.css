@@ -1,0 +1,517 @@
+/* ===== Official Electoral Return — print-ready A4 (SUES Electoral Commission) ===== */
+
+.er-doc-wrapper {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 100;
+  background: #eef1f5;
+  overflow: auto;
+  padding: 24px 0 48px;
+}
+
+.er-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  max-width: 210mm;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  padding: 10px 16px;
+}
+.er-toolbar__title {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #08111f;
+}
+.er-toolbar__sub {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+}
+.er-toolbar__actions {
+  display: flex;
+  gap: 8px;
+}
+.er-toolbar__btn {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #08111f;
+  cursor: pointer;
+}
+.er-toolbar__btn--primary {
+  background: #087443;
+  border-color: #087443;
+  color: #fff;
+}
+.er-toolbar__btn:hover {
+  opacity: 0.9;
+}
+
+/* ---------- Sheet ---------- */
+.er-sheet {
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  background: #fcfcfb;
+  color: #0f172a;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.12);
+  position: relative;
+  padding: 42mm 16mm 18mm;
+  box-sizing: border-box;
+  font-family: Inter, Helvetica Neue, Arial, sans-serif;
+  overflow: hidden;
+}
+.er-sheet + .er-sheet {
+  margin-top: 24px;
+}
+
+/* ---------- Header band ---------- */
+.er-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 32mm;
+  background: #08111f;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 16mm;
+  box-sizing: border-box;
+}
+.er-header__gold {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3mm;
+  background: #c89b2c;
+}
+.er-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.6mm;
+  background: #c89b2c;
+}
+.er-header__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.er-header__org {
+  font-size: 19pt;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.er-header__society {
+  font-size: 15pt;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.er-header__ec {
+  font-size: 9.5pt;
+  font-weight: 400;
+  color: #cbd5e1;
+  margin-top: 2px;
+}
+/* Gold badge top right */
+.er-header__badge {
+  position: absolute;
+  top: 11mm;
+  right: 16mm;
+  background: #c89b2c;
+  color: #08111f;
+  font-size: 8.5pt;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 3mm 6mm;
+  border-radius: 2mm;
+}
+
+/* ---------- Title ---------- */
+.er-title {
+  text-align: center;
+  padding-bottom: 5mm;
+  border-bottom: 1.5px solid #c89b2c;
+}
+.er-title__main {
+  font-size: 20pt;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #08111f;
+  text-transform: uppercase;
+}
+.er-title__sub {
+  font-size: 9.5pt;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  margin-top: 2.5mm;
+  letter-spacing: 0.3px;
+}
+
+/* ---------- Meta / info ---------- */
+.er-meta {
+  margin-top: 6mm;
+}
+.er-meta__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid #d6dce5;
+  border-radius: 2mm;
+  overflow: hidden;
+}
+.er-meta__cell {
+  padding: 3.2mm 5mm;
+  border-bottom: 1px solid #d6dce5;
+  display: flex;
+  align-items: baseline;
+  gap: 4mm;
+}
+.er-meta__cell:nth-child(odd) {
+  border-right: 1px solid #d6dce5;
+}
+.er-meta__cell:nth-child(n + 3) {
+  border-bottom: 0;
+}
+.er-meta__label {
+  font-size: 8pt;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  width: 48mm;
+  flex-shrink: 0;
+}
+.er-meta__value {
+  font-size: 10.5pt;
+  font-weight: 700;
+  color: #08111f;
+  text-transform: uppercase;
+}
+
+/* ---------- Section bar ---------- */
+.er-bar {
+  background: #087443;
+  color: #fff;
+  font-size: 11pt;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3mm 5mm;
+  border-radius: 1mm;
+}
+.er-bar--navy {
+  background: #152338;
+}
+
+/* ---------- Position result box ---------- */
+.er-pos {
+  border: 1px solid #d6dce5;
+  border-radius: 2mm;
+  overflow: hidden;
+}
+.er-pos + .er-pos,
+.er-pos + .er-sec {
+  margin-top: 4.5mm;
+}
+.er-pos__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2.6mm 5mm;
+  background: #f8fafc;
+  border-bottom: 1px solid #d6dce5;
+}
+.er-pos__title {
+  font-size: 11pt;
+  font-weight: 800;
+  color: #08111f;
+  text-transform: uppercase;
+}
+.er-pos__badge {
+  font-size: 7pt;
+  font-weight: 800;
+  color: #9a6b00;
+  background: #fbf7ea;
+  border: 1px solid #c89b2c;
+  border-left: 2.5mm solid #c89b2c;
+  border-radius: 1mm;
+  padding: 1.8mm 3mm;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.er-pos__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3mm 5mm;
+  border-bottom: 1px solid #d6dce5;
+}
+.er-pos__row:last-child {
+  border-bottom: 0;
+}
+.er-pos__row--band {
+  background: #f8fafc;
+}
+.er-pos__cand {
+  font-size: 9.5pt;
+  font-weight: 700;
+  color: #0f172a;
+}
+.er-pos__stat {
+  font-size: 9pt;
+  font-weight: 700;
+  color: #334155;
+}
+.er-pos__stat b {
+  color: #087443;
+}
+
+/* affirmation strip */
+.er-pos__affirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3mm 5mm;
+  background: #ecfdf2;
+  border-top: 1px solid #abefc6;
+}
+.er-pos__affirm-label {
+  font-size: 9.5pt;
+  font-weight: 800;
+  color: #087443;
+}
+.er-pos__affirm-detail {
+  font-size: 7.5pt;
+  font-weight: 400;
+  color: #334155;
+}
+
+/* contested table */
+.er-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.er-table th,
+.er-table td {
+  padding: 3mm 5mm;
+  border-bottom: 1px solid #d6dce5;
+  text-align: left;
+  font-size: 9.5pt;
+}
+.er-table th {
+  background: #f8fafc;
+  color: #64748b;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 7.5pt;
+  letter-spacing: 0.3px;
+}
+.er-table td {
+  color: #0f172a;
+}
+.er-table th:nth-child(2),
+.er-table td:nth-child(2),
+.er-table th:nth-child(3),
+.er-table td:nth-child(3) {
+  text-align: center;
+  width: 30mm;
+}
+.er-table td:first-child {
+  font-weight: 700;
+}
+.er-table tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ---------- Position total (page 2) ---------- */
+.er-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ecfdf2;
+  border: 1px solid #abefc6;
+  border-radius: 2mm;
+  padding: 3mm 5mm;
+}
+.er-total__label {
+  font-size: 9pt;
+  font-weight: 800;
+  color: #087443;
+  text-transform: uppercase;
+}
+.er-total__value {
+  font-size: 10pt;
+  font-weight: 800;
+  color: #08111f;
+}
+.er-total__elected {
+  font-size: 9pt;
+  font-weight: 800;
+  color: #087443;
+}
+
+/* ---------- Summary / integrity table ---------- */
+.er-summary {
+  border: 1px solid #d6dce5;
+  border-radius: 2mm;
+  overflow: hidden;
+}
+.er-summary table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.er-summary th,
+.er-summary td {
+  padding: 3.4mm 5mm;
+  border: 1px solid #d6dce5;
+  text-align: left;
+  font-size: 9.5pt;
+}
+.er-summary th {
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 8pt;
+  letter-spacing: 0.3px;
+}
+.er-summary td {
+  text-align: right;
+  font-weight: 700;
+  color: #08111f;
+}
+.er-summary td.er-summary__big {
+  font-size: 15pt;
+}
+
+/* ---------- Integrity notice (cream/gold) ---------- */
+.er-notice {
+  border: 1.5px solid #c89b2c;
+  border-radius: 2mm;
+  background: #fbf7ea;
+  padding: 4mm 5mm;
+}
+.er-notice__head {
+  font-size: 8.5pt;
+  font-weight: 800;
+  color: #9a6b00;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 2mm;
+}
+.er-notice p {
+  margin: 0;
+  font-size: 9.5pt;
+  color: #334155;
+  line-height: 1.5;
+}
+
+/* ---------- Record paragraph ---------- */
+.er-record {
+  background: #fff;
+}
+.er-record p {
+  margin: 0;
+  font-size: 9.5pt;
+  color: #334155;
+  line-height: 1.6;
+  text-align: justify;
+}
+
+/* ---------- Footer ---------- */
+.er-footer {
+  position: absolute;
+  left: 16mm;
+  right: 16mm;
+  bottom: 10mm;
+}
+.er-footer__gold {
+  border-top: 1.5px solid #c89b2c;
+  margin-bottom: 2.5mm;
+}
+.er-footer__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 7.5pt;
+  color: #64748b;
+}
+.er-footer__org {
+  font-weight: 700;
+}
+.er-footer__page {
+  font-weight: 700;
+  color: #08111f;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@media print {
+  body {
+    background: #fff !important;
+  }
+  body:has(.er-doc-wrapper) * {
+    visibility: hidden;
+  }
+  .er-doc-wrapper,
+  .er-doc-wrapper * {
+    visibility: visible;
+  }
+  .er-doc-wrapper {
+    position: static;
+    inset: auto;
+    background: #fff;
+    padding: 0;
+    overflow: visible;
+  }
+  .er-toolbar {
+    display: none !important;
+  }
+  .er-sheet {
+    width: 210mm;
+    height: 297mm;
+    min-height: 297mm;
+    margin: 0;
+    box-shadow: none;
+    page-break-after: always;
+    break-after: page;
+    overflow: hidden;
+  }
+  .er-sheet:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  .er-header,
+  .er-header__gold,
+  .er-bar,
+  .er-pos__affirm {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
