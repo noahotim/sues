@@ -39,22 +39,32 @@ async function downloadSheetsAsPdf({ title, wrapper, sheet, prefix }: DownloadOp
   const A4_H = 297;
 
   for (let i = 0; i < sheets.length; i++) {
-    // Temporarily force precise A4 rendering: remove shadows/margins for capture.
+    // Capture the sheet at its true on-screen pixel size so the PDF matches the
+    // web exactly (1:1 A4 proportions, no stretching).
+    const rect = sheets[i].getBoundingClientRect();
     const canvas = await html2canvas(sheets[i], {
-      scale: 2,
+      scale: 3,
       useCORS: true,
       backgroundColor: "#ffffff",
       logging: false,
+      width: Math.ceil(rect.width),
+      height: Math.ceil(rect.height),
     });
 
-    const imgData = canvas.toDataURL("image/jpeg", 0.93);
+    const imgData = canvas.toDataURL("image/jpeg", 0.95);
     const ratio = canvas.width / canvas.height;
-    const imgW = A4_W;
+    // Uniform scale (preserve aspect ratio) so text is never stretched.
+    let imgW = A4_W;
     let imgH = imgW / ratio;
-    if (imgH > A4_H) imgH = A4_H;
+    if (imgH > A4_H) {
+      imgH = A4_H;
+      imgW = imgH * ratio;
+    }
+    const x = (A4_W - imgW) / 2;
+    const y = (A4_H - imgH) / 2;
 
     if (i > 0) pdf.addPage();
-    pdf.addImage(imgData, "JPEG", 0, 0, imgW, imgH);
+    pdf.addImage(imgData, "JPEG", x, y, imgW, imgH);
   }
 
   const safe = title.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "official-document";
