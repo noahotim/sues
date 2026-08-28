@@ -2,12 +2,14 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { authService, UserProfile } from "../services";
 import { ROLE_PERMISSIONS, ROLES } from "./constants";
 import type { User as FirebaseUser } from "firebase/auth";
+import { getAuth, signOut } from "firebase/auth";
 
 interface AuthContextValue {
   session: { user: { id: string; email: string } } | null;
@@ -33,6 +35,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<AuthContextValue["role"]>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const maintenanceWasEnabled = useRef(false);
+  const alertShownForLock = useRef(false);
 
   async function loadUserData(firebaseUser: FirebaseUser) {
     try {
@@ -106,6 +110,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
     })();
   }, []);
+
+  // Maintenance kill-switch: the moment it flips ON, force every signed-in user
+  // out and tell them with a popup. This catches users already logged in (they
+  // never re-run the sign-in gate), on every route.
+  useEffect(() => {
+    maintenanceWasEnabled.current = false;
+    const unsub = authService.subscribeToMaintenance(async (mode) => {
+      const nowEnabled = mode.enabled;
+      if (nowEnabled && !maintenanceWasEnabled.current && session) {
+        // Disabled -> enabled transition while a user is signed in: log them out.
+        if (!alertShownForLock.current) {
+          alertShownForLock.current = true;
+          alert(
+            "Access to this system is temporarily locked.\n\nYou have been signed out.\nCONTACT NOAH to be authorised."
+          );
+        }
+        try {
+          await signOut(getAuth());
+        } catch {
+          /* already signed out */
+        }
+      }
+      if (!nowEnabled) {
+        // Lock lifted: allow the next lock to alert/sign out again.
+        maintenanceWasEnabled.current = false;
+        alertShownForLock.current = false;
+      } else {
+        maintenanceWasEnabled.current = true;
+      }
+    });
+    return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
   return (
     <AuthContext.Provider

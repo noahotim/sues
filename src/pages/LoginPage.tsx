@@ -84,6 +84,9 @@ export default function LoginPage() {
           <h1 className="text-2xl font-extrabold text-primary-900 tracking-tight mb-3">
             CONTACT NOAH
           </h1>
+          <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line mb-2">
+            {maintenance.message.split("\n")[0]}
+          </p>
           <LockoutGame />
         </div>
       </div>
