@@ -95,6 +95,13 @@
   padding: 0 16mm;
   box-sizing: border-box;
 }
+.er-header__logo {
+  width: 24mm;
+  height: 24mm;
+  object-fit: contain;
+  margin-right: 8mm;
+  border-radius: 2mm;
+}
 .er-header__gold {
   position: absolute;
   top: 0;

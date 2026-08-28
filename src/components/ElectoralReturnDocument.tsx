@@ -17,6 +17,7 @@ interface ElectoralReturnDocumentProps {
   turnoutPercentage: number;
   onClose: () => void;
   onPrint: () => void;
+  onDownload: () => void;
 }
 
 /** Format a Date as DD/MM/YYYY • HH:MM:SS */
@@ -38,6 +39,7 @@ export default function ElectoralReturnDocument({
   turnoutPercentage,
   onClose,
   onPrint,
+  onDownload,
 }: ElectoralReturnDocumentProps) {
   const nowStamp = fmtStamp(new Date());
   const electionLabel = (election.title || "2026 SUES Elections").toUpperCase();
@@ -128,6 +130,7 @@ export default function ElectoralReturnDocument({
   const header = (
     <div className="er-header">
       <div className="er-header__gold" />
+      <img className="er-header__logo" src="/sues-logo.jpg" alt="SUES logo" />
       <div className="er-header__text">
         <span className="er-header__org">Soroti University</span>
         <span className="er-header__society">Engineering Society</span>
@@ -165,6 +168,9 @@ export default function ElectoralReturnDocument({
           <div className="er-toolbar__actions">
             <button className="er-toolbar__btn" onClick={onClose}>
               Back to Results
+            </button>
+            <button className="er-toolbar__btn" onClick={onDownload}>
+              Download PDF
             </button>
             <button className="er-toolbar__btn er-toolbar__btn--primary" onClick={onPrint}>
               Print / Save as PDF

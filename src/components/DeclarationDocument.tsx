@@ -19,6 +19,7 @@ interface DeclarationDocumentProps {
   totalVotes: number;
   onClose: () => void;
   onPrint: () => void;
+  onDownload: () => void;
 }
 
 /** Format a Date/Timestamp as DD/MM/YYYY HH:MM:SS */
@@ -49,6 +50,7 @@ export default function DeclarationDocument({
   totalVotes,
   onClose,
   onPrint,
+  onDownload,
 }: DeclarationDocumentProps) {
   const nowStamp = fmtStamp(new Date());
   const ecoLabel = `${election.title || "OFFICIAL DECLARATION OF RESULTS"}`;
@@ -162,6 +164,9 @@ export default function DeclarationDocument({
           <div className="decl-toolbar__actions">
             <button className="decl-toolbar__btn" onClick={onClose}>
               Back to Results
+            </button>
+            <button className="decl-toolbar__btn" onClick={onDownload}>
+              Download PDF
             </button>
             <button className="decl-toolbar__btn decl-toolbar__btn--primary" onClick={onPrint}>
               Print / Save as PDF

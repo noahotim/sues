@@ -24,6 +24,10 @@ import {
 } from "../components/ui";
 import DeclarationDocument from "../components/DeclarationDocument";
 import ElectoralReturnDocument from "../components/ElectoralReturnDocument";
+import {
+  downloadDeclarationPdf,
+  downloadElectoralReturnPdf,
+} from "../lib/officialPdf";
 
 interface PositionResult {
   position: Position;
@@ -340,6 +344,17 @@ export default function ResultsPage() {
         totalVotes={Object.values(voteCounts).reduce((s, v) => s + v, 0)}
         onClose={() => setShowDeclaration(false)}
         onPrint={() => window.print()}
+        onDownload={() =>
+          void downloadDeclarationPdf({
+            election: selectedElection,
+            positionResults,
+            rosterCount: roster.length,
+            participants,
+            votersVoted,
+            turnoutPercentage,
+            totalVotes: Object.values(voteCounts).reduce((s, v) => s + v, 0),
+          })
+        }
       />
     )}
     {showElectoralReturn && selectedElection && (
@@ -351,6 +366,15 @@ export default function ResultsPage() {
         turnoutPercentage={turnoutPercentage}
         onClose={() => setShowElectoralReturn(false)}
         onPrint={() => window.print()}
+        onDownload={() =>
+          void downloadElectoralReturnPdf({
+            election: selectedElection,
+            positionResults,
+            rosterCount: roster.length,
+            votersVoted,
+            turnoutPercentage,
+          })
+        }
       />
     )}
     <div className={isPublicView ? "min-h-screen bg-slate-50" : "space-y-6 animate-fade-in"}>
