@@ -6,6 +6,8 @@ const FONT_LINK =
   '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
   '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">';
 
+const IFRAME_ID = "official-document-print-frame";
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -15,12 +17,12 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * Open the official document in a dedicated print window containing ONLY the
- * document markup + its stylesheet, then invoke the native print dialog.
- * The preview shows exactly what is on screen, and "Save as PDF" produces a
- * crisp vector PDF identical to the web view.
+ * Print the official document by rendering it inside a hidden, off-screen
+ * iframe (not a pop-up, so it is never blocked) and invoking the native print
+ * dialog on that frame. The preview shows exactly the on-screen document and
+ * "Save as PDF" produces a crisp vector PDF identical to the web view.
  */
-function openPrintWindow(selector: string, title: string) {
+function printDocument(selector: string, title: string) {
   const root = document.querySelector(selector) as HTMLElement | null;
   if (!root) {
     console.warn(`[officialPdf] wrapper not found: ${selector}`);
@@ -28,9 +30,27 @@ function openPrintWindow(selector: string, title: string) {
   }
   const css = selector === ".er-doc-wrapper" ? electoralReturnCss : declarationCss;
 
-  const win = window.open("", "_blank", "noopener=no");
-  if (!win) {
-    alert("Your browser blocked the pop-up. Please allow pop-ups and try again.");
+  // Reuse one hidden iframe to avoid repeated DOM churn.
+  let frame = document.getElementById(IFRAME_ID) as HTMLIFrameElement | null;
+  if (!frame) {
+    frame = document.createElement("iframe");
+    frame.id = IFRAME_ID;
+    frame.setAttribute("aria-hidden", "true");
+    frame.style.position = "fixed";
+    frame.style.top = "0";
+    frame.style.left = "-10000px";
+    frame.style.width = "794px"; // 210mm
+    frame.style.height = "1123px"; // 297mm
+    frame.style.border = "0";
+    frame.style.opacity = "0";
+    frame.style.pointerEvents = "none";
+    document.body.appendChild(frame);
+  }
+
+  const frameDoc = frame.contentDocument;
+  const frameWin = frame.contentWindow;
+  if (!frameDoc || !frameWin) {
+    alert("Unable to open the print view in this browser.");
     return;
   }
 
@@ -47,27 +67,32 @@ function openPrintWindow(selector: string, title: string) {
 </body>
 </html>`;
 
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.focus();
+  frameDoc.open();
+  frameDoc.write(html);
+  frameDoc.close();
 
-  // Let fonts/images settle before printing.
-  setTimeout(() => {
+  // Print once the frame content has settled (fonts/images).
+  let printed = false;
+  const doPrint = () => {
+    if (printed) return;
+    printed = true;
     try {
-      win.print();
+      frameWin.focus();
+      frameWin.print();
     } catch {
       /* no-op */
     }
-  }, 1500);
+  };
+  frame.addEventListener("load", () => setTimeout(doPrint, 300), { once: true });
+  setTimeout(doPrint, 1500);
 }
 
 /** Download / print the Declaration of Results document currently shown. */
 export function downloadDeclarationPdf(title: string) {
-  openPrintWindow(".decl-doc-wrapper", title);
+  printDocument(".decl-doc-wrapper", title);
 }
 
 /** Download / print the Official Electoral Return document currently shown. */
 export function downloadElectoralReturnPdf(title: string) {
-  openPrintWindow(".er-doc-wrapper", title);
+  printDocument(".er-doc-wrapper", title);
 }
