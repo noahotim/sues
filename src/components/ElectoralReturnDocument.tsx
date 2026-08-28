@@ -265,15 +265,6 @@ export default function ElectoralReturnDocument({
             </div>
           </div>
 
-          <div className="er-sec" style={{ marginTop: "3mm" }}>
-            <div className="er-notice">
-              <div className="er-notice__head">Election Integrity Notice</div>
-              <p>
-                Votes are recorded anonymously — no ballot can be traced back to a voter.
-              </p>
-            </div>
-          </div>
-
           <div className="er-sec" style={{ marginTop: "4mm" }}>
             <div className="er-bar er-bar--navy">Official Record</div>
             <div className="er-record er-summary" style={{ marginTop: 0 }}>

@@ -369,7 +369,6 @@ export default function DeclarationDocument({
           )}
 
           {summaryBlock}
-          {certificationBlock}
 
           {footer(3)}
         </div>
@@ -387,6 +386,8 @@ export default function DeclarationDocument({
               </div>
             ))}
           </div>
+
+          {certificationBlock}
 
           <div className="decl-section">
             <div className="decl-section__head">Official Record</div>
