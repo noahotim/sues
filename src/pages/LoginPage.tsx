@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { authService, MAINTENANCE_ERR_MARKER, MAINTENANCE_DEFAULT_MESSAGE, type MaintenanceMode } from "../services";
+import { authService, isConfiguredMaintenanceAdmin, MAINTENANCE_ERR_MARKER, MAINTENANCE_DEFAULT_MESSAGE, type MaintenanceMode } from "../services";
 import { Button, Spinner } from "../components/ui";
 
 export default function LoginPage() {
@@ -9,7 +9,7 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [maintenance, setMaintenance] = useState<MaintenanceMode>({ enabled: false, message: MAINTENANCE_DEFAULT_MESSAGE });
-  const [dismissed, setDismissed] = useState(false);
+  const [lockedOut, setLockedOut] = useState(false);
 
   // Live maintenance kill-switch.
   useEffect(() => {
@@ -25,7 +25,7 @@ export default function LoginPage() {
         navigate("/admin/dashboard", { replace: true });
       } else if (res.error) {
         if (res.error.startsWith(MAINTENANCE_ERR_MARKER)) {
-          setError("Access denied. Only authorised administrators can sign in.");
+          setLockedOut(true);
         } else {
           setError(res.error);
         }
@@ -33,19 +33,19 @@ export default function LoginPage() {
     })();
   }, [navigate]);
 
-  async function handleGoogleSignIn() {
+  async function handleGoogleSignIn(email?: string) {
     setError("");
     setSubmitting(true);
 
     try {
-      const { user, error, redirecting } = await authService.signInWithGoogle();
+      const { user, error, redirecting } = await authService.signInWithGoogle(email);
       if (redirecting) {
         setRedirecting(true);
         return;
       }
       if (error || !user) {
         if (error && error.startsWith(MAINTENANCE_ERR_MARKER)) {
-          setError("Access denied. Only authorised administrators can sign in.");
+          setLockedOut(true);
         } else {
           setError(error || "Authentication failed");
         }
@@ -60,17 +60,25 @@ export default function LoginPage() {
   }
 
   // While maintenance is ON and the full-screen lockout hasn't been passed,
-  // render the branded CONTACT NOAH lockout (original first version look with
-  // a stripe pattern background and the catch-the-dot game). Only an
-  // authorised/exempt email is allowed through; non-exempt emails are blocked
-  // after attempting sign-in.
-  if (maintenance.enabled && !dismissed) {
+  // render the branded CONTACT NOAH lockout (stripe pattern background and the
+  // catch-the-dot game) with an email gate: only the configured Administrator
+  // email proceeds to Google sign-in; anyone else is blocked here before ever
+  // seeing Google's account chooser.
+  if (maintenance.enabled && !lockedOut) {
     return (
       <LockoutScreen
         message={maintenance.message}
-        onAdminSignIn={() => {
-          setDismissed(true);
-          handleGoogleSignIn();
+        submitting={submitting}
+        redirecting={redirecting}
+        onAdminSignIn={async (email) => {
+          setError("");
+          // Only the configured Administrator email may proceed to Google.
+          const isAdmin = await isConfiguredMaintenanceAdmin(email);
+          if (!isAdmin) {
+            setLockedOut(true);
+            return;
+          }
+          await handleGoogleSignIn(email);
         }}
       />
     );
@@ -103,7 +111,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <Button onClick={handleGoogleSignIn} disabled={submitting || redirecting} className="w-full" size="lg">
+          <Button onClick={() => handleGoogleSignIn()} disabled={submitting || redirecting} className="w-full" size="lg">
             {submitting || redirecting ? "Signing in..." : "Sign in with Google"}
           </Button>
 
@@ -159,15 +167,26 @@ export default function LoginPage() {
 /**
  * Full-screen lockout shown when maintenance is ON. Recreates the original
  * first-version look: stripe pattern background, lock icon, CONTACT NOAH,
- * the catch-the-dot game, and a subtle "Administrator?" Google sign-in button.
- * Only the exempt/admin email is allowed through; non-exempt emails are blocked
- * after they attempt sign-in.
+ * and the catch-the-dot game. Signing in is gated behind an email field so
+ * ONLY the configured Administrator email proceeds to Google — everyone else
+ * is blocked here without ever seeing Google's account chooser.
  */
-function LockoutScreen({ message, onAdminSignIn }: { message: string; onAdminSignIn: () => void }) {
+function LockoutScreen({
+  message,
+  submitting,
+  redirecting,
+  onAdminSignIn,
+}: {
+  message: string;
+  submitting: boolean;
+  redirecting: boolean;
+  onAdminSignIn: (email: string) => void;
+}) {
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
   const [pos, setPos] = useState({ top: 30, left: 30 });
   const [hit, setHit] = useState(false);
+  const [email, setEmail] = useState("");
 
   function handleHit() {
     const box = 300;
@@ -237,9 +256,35 @@ function LockoutScreen({ message, onAdminSignIn }: { message: string; onAdminSig
           </p>
         </div>
 
-        <div className="mt-6">
-          <Button onClick={onAdminSignIn} className="w-full" size="lg">
-            Administrator? Sign in with Google
+        <div className="mt-6 border-t border-slate-200 pt-5 text-left">
+          <label
+            htmlFor="admin-email"
+            className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 text-center"
+          >
+            Administrator sign-in
+          </label>
+          <input
+            id="admin-email"
+            type="email"
+            autoComplete="email"
+            placeholder="Enter your administrator email"
+            value={email}
+            disabled={submitting || redirecting}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && email.trim() && !submitting && !redirecting) {
+                onAdminSignIn(email.trim());
+              }
+            }}
+            className="w-full rounded-sm border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-900 disabled:opacity-60"
+          />
+          <Button
+            onClick={() => email.trim() && onAdminSignIn(email.trim())}
+            disabled={!email.trim() || submitting || redirecting}
+            className="w-full mt-3"
+            size="lg"
+          >
+            {submitting || redirecting ? "Signing in…" : "Sign in with Google"}
           </Button>
         </div>
       </div>

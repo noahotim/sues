@@ -15,13 +15,14 @@ import {
   candidateService,
   rosterService,
   authService,
+  getMaintenanceAdminEmails,
   type MaintenanceMode,
   MAINTENANCE_DEFAULT_MESSAGE,
   type Election,
   type Candidate,
   type VoterRosterEntry,
 } from "../services";
-import { Card, LoadingState, ErrorState, Badge, Select, Button } from "../components/ui";
+import { Card, LoadingState, ErrorState, Badge, Select, Button, Input } from "../components/ui";
 
 export default function DashboardPage() {
   const { profile, role } = useAuth();
@@ -33,6 +34,9 @@ export default function DashboardPage() {
   const [error, setError] = useState(false);
   const [maintenance, setMaintenance] = useState<MaintenanceMode>({ enabled: false, message: MAINTENANCE_DEFAULT_MESSAGE });
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
+  const [adminEmails, setAdminEmails] = useState("");
+  const [adminEmailsBusy, setAdminEmailsBusy] = useState(false);
+  const [adminEmailsSaved, setAdminEmailsSaved] = useState(false);
 
   const isAdmin = role?.id === "ROLE_ADMINISTRATOR";
   const canManageMaintenance = isAdmin || role?.id === "ROLE_CHAIRPERSON";
@@ -42,6 +46,9 @@ export default function DashboardPage() {
     if (!canManageMaintenance) return;
     authService.getMaintenanceMode().then((m) => {
       if (m) setMaintenance(m);
+    });
+    getMaintenanceAdminEmails().then((emails) => {
+      setAdminEmails(emails.join(", "));
     });
   }, [canManageMaintenance]);
 
@@ -54,6 +61,17 @@ export default function DashboardPage() {
         ...prev,
         enabled: !prev.enabled,
       }));
+    }
+  }
+
+  async function saveAdminEmails() {
+    setAdminEmailsBusy(true);
+    const list = adminEmails.split(",").map((e) => e.trim()).filter(Boolean);
+    const res = await authService.setMaintenanceAdminEmails(list);
+    setAdminEmailsBusy(false);
+    if (!res.error) {
+      setAdminEmailsSaved(true);
+      window.setTimeout(() => setAdminEmailsSaved(false), 2500);
     }
   }
 
@@ -224,6 +242,32 @@ export default function DashboardPage() {
                 ? "Reopen system"
                 : "Lock system (deny all sign-ins)"}
             </Button>
+          </div>
+
+          {/* Email(s) allowed to sign in while the lock is ON */}
+          <div className="mt-5 border-t border-slate-200 pt-4">
+            <label htmlFor="maintenance-admin-emails" className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
+              Administrator email(s) allowed to sign in during lock (comma-separated)
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input
+                value={adminEmails}
+                onChange={(v) => setAdminEmails(v)}
+                placeholder="admin@example.com, owner@example.com"
+              />
+              <Button
+                onClick={saveAdminEmails}
+                disabled={adminEmailsBusy || !adminEmails.trim()}
+                variant="secondary"
+                className="shrink-0"
+              >
+                {adminEmailsBusy ? "Saving…" : adminEmailsSaved ? "Saved" : "Save"}
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              Only these emails can reach Google sign-in while the system is locked. Everyone else
+              sees the CONTACT NOAH lockout.
+            </p>
           </div>
         </Card>
       )}

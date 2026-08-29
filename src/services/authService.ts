@@ -45,6 +45,11 @@ export const MAINTENANCE_ERR_MARKER = "__SUES_LOCKOUT__";
 // register / User Management) is exempt from the maintenance kill-switch.
 export const ROLE_ADMINISTRATOR = "ROLE_ADMINISTRATOR";
 
+// Doc under system_config holding the Administrator email(s) allowed to sign in
+// while maintenance is ON. Publicly readable (pre-sign-in so the login page can
+// gate who reaches the Google account chooser).
+export const MAINTENANCE_ADMINS_DOC = "admin_emails";
+
 // Hard allowlist of the ONLY accounts that are never locked out by the
 // maintenance kill-switch — a safety net so the owner is never locked out even
 // if their Administrator role is ever removed from the register. Everyone else
@@ -82,6 +87,35 @@ export async function isAdminForMaintenance(
   }
 }
 
+/**
+ * The Administrator email(s) allowed to sign in while maintenance is ON, read
+ * from the (publicly readable) system_config/admin_emails doc. Falls back to
+ * the hard-coded owner safety net so the owner is never locked out.
+ */
+export async function getMaintenanceAdminEmails(): Promise<string[]> {
+  try {
+    const snap = await getDoc(doc(db, MAINTENANCE_COLLECTION, MAINTENANCE_ADMINS_DOC));
+    if (snap.exists()) {
+      const emails = Array.isArray(snap.data()?.emails) ? snap.data()!.emails : [];
+      const cleaned = emails
+        .filter((e: unknown): e is string => typeof e === "string" && e.trim().length > 0)
+        .map((e: string) => e.trim().toLowerCase());
+      if (cleaned.length > 0) return Array.from(new Set(cleaned));
+    }
+  } catch {
+    /* fall through to safety net */
+  }
+  return Array.from(MAINTENANCE_EXEMPT_EMAILS);
+}
+
+/** Case-insensitive check against the configured maintenance admin list. */
+export async function isConfiguredMaintenanceAdmin(email: string | null | undefined): Promise<boolean> {
+  if (!email) return false;
+  const em = email.trim().toLowerCase();
+  const admins = await getMaintenanceAdminEmails();
+  return admins.includes(em);
+}
+
 // Guards against double-redirects (a second click would overwrite the pending
 // state and break the return trip) and memoizes result processing so the
 // redirect is consumed exactly once no matter how many components ask.
@@ -96,7 +130,7 @@ function clearRedirectPending() {
 }
 
 export const authService = {
-  signInWithGoogle: async (): Promise<{ user: FirebaseUser | null; error: string | null; redirecting?: boolean }> => {
+  signInWithGoogle: async (emailHint?: string): Promise<{ user: FirebaseUser | null; error: string | null; redirecting?: boolean }> => {
     try {
       // NOTE: no maintenance pre-check here. The email isn't known until Google
       // OAuth returns, so a pre-check would wrongly block the exempt admins.
@@ -106,6 +140,14 @@ export const authService = {
       // Always show the Google account chooser, so a user can pick a DIFFERENT
       // account (e.g. when a device has several Google accounts signed in).
       provider.setCustomParameters({ prompt: "select_account" });
+      // During maintenance the log-in page verified the typed email before
+      // reaching here, so pin Google to that exact account as a hint.
+      if (emailHint && emailHint.trim()) {
+        provider.setCustomParameters({
+          prompt: "select_account",
+          login_hint: emailHint.trim(),
+        });
+      }
 
       // Prefer popup; some browsers block it, in which case fall back to a
       // full-page redirect (works everywhere, immune to popup blockers).
@@ -217,6 +259,25 @@ export const authService = {
       };
       await setDoc(ref, next, { merge: true });
       auditService.log("MAINTENANCE_MODE", "system", MAINTENANCE_DOC, { enabled });
+      return { error: null };
+    } catch (error: any) {
+      return { error: error.message };
+    }
+  },
+
+  /**
+   * Set the email(s) allowed to sign in while maintenance is ON (Administrator /
+   * Chairperson only). Stored in the publicly-readable system_config/admin_emails
+   * doc so the login page can gate who reaches the Google account chooser.
+   */
+  setMaintenanceAdminEmails: async (emails: string[]) => {
+    try {
+      const cleaned = (emails || [])
+        .map((e) => e.trim().toLowerCase())
+        .filter((e) => e.includes("@"));
+      const ref = doc(db, MAINTENANCE_COLLECTION, MAINTENANCE_ADMINS_DOC);
+      await setDoc(ref, { emails: Array.from(new Set(cleaned)), updatedAt: serverTimestamp() }, { merge: true });
+      auditService.log("MAINTENANCE_MODE", "system", MAINTENANCE_ADMINS_DOC, { emails: cleaned });
       return { error: null };
     } catch (error: any) {
       return { error: error.message };
