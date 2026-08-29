@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authService, isConfiguredMaintenanceAdmin, MAINTENANCE_ERR_MARKER, MAINTENANCE_DEFAULT_MESSAGE, type MaintenanceMode } from "../services";
 import { Button, Spinner } from "../components/ui";
 
-export default function LoginPage() {
-  const navigate = useNavigate();
+export default function LoginPage() {  const navigate = useNavigate();
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
@@ -167,7 +166,7 @@ export default function LoginPage() {
 /**
  * Full-screen lockout shown when maintenance is ON. Recreates the original
  * first-version look: stripe pattern background, lock icon, CONTACT NOAH,
- * and the catch-the-dot game. Signing in is gated behind an email field so
+ * and the Snake game. Signing in is gated behind an email field so
  * ONLY the configured Administrator email proceeds to Google — everyone else
  * is blocked here without ever seeing Google's account chooser.
  */
@@ -182,27 +181,7 @@ function LockoutScreen({
   redirecting: boolean;
   onAdminSignIn: (email: string) => void;
 }) {
-  const [score, setScore] = useState(0);
-  const [best, setBest] = useState(0);
-  const [pos, setPos] = useState({ top: 30, left: 30 });
-  const [hit, setHit] = useState(false);
   const [email, setEmail] = useState("");
-
-  function handleHit() {
-    const box = 300;
-    const dot = 40;
-    setPos({
-      top: Math.floor(Math.random() * (box - dot)),
-      left: Math.floor(Math.random() * (box - dot)),
-    });
-    setScore((s) => {
-      const next = s + 1;
-      setBest((b) => Math.max(b, next));
-      return next;
-    });
-    setHit(true);
-    window.setTimeout(() => setHit(false), 120);
-  }
 
   return (
     <div
@@ -226,34 +205,7 @@ function LockoutScreen({
         </p>
 
         <div className="mt-2 mb-4 border-t border-slate-200 pt-4">
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
-            Pass the time — catch the dot
-          </p>
-          <div
-            className="relative bg-slate-100 rounded-sm border border-slate-200 overflow-hidden mx-auto"
-            style={{ width: 300, height: 180 }}
-          >
-            <button
-              type="button"
-              aria-label="Catch the dot"
-              onClick={handleHit}
-              className="absolute rounded-full cursor-pointer transition-transform"
-              style={{
-                width: 40,
-                height: 40,
-                top: pos.top,
-                left: pos.left,
-                background: hit ? "#dc2626" : "#C89B2C",
-                boxShadow: `0 0 ${hit ? 20 : 10}px ${hit ? "#dc2626" : "#C89B2C"}`,
-                transform: hit ? "scale(0.85)" : "scale(1)",
-              }}
-            />
-          </div>
-          <p className="mt-2 text-xs text-slate-600">
-            Score: <span className="font-bold text-primary-900">{score}</span>
-            <span className="mx-2 text-slate-300">•</span>
-            Best: <span className="font-bold text-primary-900">{best}</span>
-          </p>
+          <SnakeGame />
         </div>
 
         <div className="mt-6 border-t border-slate-200 pt-5 text-left">
@@ -291,3 +243,265 @@ function LockoutScreen({
     </div>
   );
 }
+
+/**
+ * Self-contained classic Snake game for the maintenance lockout screen. No
+ * external dependencies. Control with the arrow keys / WASD or the on-screen
+ * d-pad. Eat the food to grow; game ends if you hit a wall or yourself.
+ */
+function SnakeGame() {
+  const SIZE = 15; // 15 x 15 grid
+
+  interface GameState {
+    snake: [number, number][];
+    food: [number, number];
+    running: boolean;
+    gameOver: boolean;
+    score: number;
+  }
+
+  // Mutable game state lives in a ref so the interval can read/compute from the
+  // latest snapshot without side effects inside state updaters (StrictMode-safe).
+  const game = useRef<GameState>({
+    snake: [
+      [7, 7],
+      [6, 7],
+      [5, 7],
+    ],
+    food: [10, 7],
+    running: false,
+    gameOver: false,
+    score: 0,
+  });
+  const dirRef = useRef<[number, number]>([1, 0]);
+  const [, setTick] = useState(0);
+  const [best, setBest] = useState(0);
+
+  const render = () => setTick((t) => t + 1);
+
+  // Restrict turns so the snake can't reverse into itself.
+  function tryTurn(next: [number, number]) {
+    const [dx, dy] = dirRef.current;
+    // ignore same direction and 180-degree reversals
+    if ((next[0] === dx && next[1] === dy) || (next[0] === -dx && next[1] === -dy)) {
+      return;
+    }
+    dirRef.current = next;
+  }
+
+  // Spawn food somewhere not occupied by the snake.
+  function spawnFood(s: [number, number][]): [number, number] {
+    const occupied = new Set(s.map((c) => c[0] + "," + c[1]));
+    if (occupied.size >= SIZE * SIZE) return [-1, -1]; // board full -> win
+    let cell: [number, number] = [-1, -1];
+    let guard = 0;
+    do {
+      cell = [Math.floor(Math.random() * SIZE), Math.floor(Math.random() * SIZE)];
+      guard++;
+    } while (occupied.has(cell[0] + "," + cell[1]) && guard < 200);
+    return cell;
+  }
+
+  // Keyboard controls.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!game.current.running) return;
+      switch (e.key) {
+        case "ArrowUp":
+        case "w":
+        case "W":
+          e.preventDefault();
+          tryTurn([0, -1]);
+          break;
+        case "ArrowDown":
+        case "s":
+        case "S":
+          e.preventDefault();
+          tryTurn([0, 1]);
+          break;
+        case "ArrowLeft":
+        case "a":
+        case "A":
+          e.preventDefault();
+          tryTurn([-1, 0]);
+          break;
+        case "ArrowRight":
+        case "d":
+        case "D":
+          e.preventDefault();
+          tryTurn([1, 0]);
+          break;
+        default:
+          break;
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Game loop.
+  useEffect(() => {
+    if (!game.current.running) return;
+    const id = window.setInterval(() => {
+      const g = game.current;
+      const [dx, dy] = dirRef.current;
+      const head = g.snake[0];
+      const nextHead: [number, number] = [head[0] + dx, head[1] + dy];
+
+      // Wall collision -> game over.
+      if (nextHead[0] < 0 || nextHead[0] >= SIZE || nextHead[1] < 0 || nextHead[1] >= SIZE) {
+        g.running = false;
+        g.gameOver = true;
+        render();
+        return;
+      }
+
+      const willEat = nextHead[0] === g.food[0] && nextHead[1] === g.food[1];
+      const body = willEat ? g.snake : g.snake.slice(0, -1);
+
+      // Self collision -> game over.
+      if (body.some((c) => c[0] === nextHead[0] && c[1] === nextHead[1])) {
+        g.running = false;
+        g.gameOver = true;
+        render();
+        return;
+      }
+
+      const next = [nextHead, ...body];
+      g.snake = next;
+      if (willEat) {
+        g.score += 1;
+        setBest((b) => {
+          const nb = Math.max(b, g.score);
+          try { localStorage.setItem("sues_snake_best", String(nb)); } catch { /* ignore */ }
+          return nb;
+        });
+        g.food = spawnFood(next);
+      }
+      render();
+    }, 130);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game.current.running]);
+
+  // Load best score once.
+  useEffect(() => {
+    try {
+      const stored = Number(localStorage.getItem("sues_snake_best") || "0");
+      if (stored > 0) setBest(stored);
+    } catch { /* ignore */ }
+  }, []);
+
+  function start() {
+    const g = game.current;
+    g.snake = [
+      [7, 7],
+      [6, 7],
+      [5, 7],
+    ];
+    dirRef.current = [1, 0];
+    g.food = spawnFood([
+      [7, 7],
+      [6, 7],
+      [5, 7],
+    ]);
+    g.score = 0;
+    g.gameOver = false;
+    g.running = true;
+    render();
+  }
+
+  const { snake, food, running, gameOver, score } = game.current;
+  const cellPx = 16;
+  const boardPx = SIZE * cellPx;
+
+  return (
+    <div className="flex flex-col items-center">
+      <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
+        Pass the time — Snake
+      </p>
+      <div className="flex items-center justify-between w-full mb-2 text-xs text-slate-600">
+        <span>
+          Score: <span className="font-bold text-primary-900">{score}</span>
+        </span>
+        <span>
+          Best: <span className="font-bold text-primary-900">{best}</span>
+        </span>
+      </div>
+      <div
+        className="relative bg-slate-100 rounded-sm border border-slate-200 overflow-hidden"
+        style={{ width: boardPx, height: boardPx }}
+        onKeyDown={(e) => {
+          // allow arrow keys to work even when the board itself doesn't have focus
+          if (running) {
+            if (e.key === "ArrowUp") tryTurn([0, -1]);
+            if (e.key === "ArrowDown") tryTurn([0, 1]);
+            if (e.key === "ArrowLeft") tryTurn([-1, 0]);
+            if (e.key === "ArrowRight") tryTurn([1, 0]);
+          }
+        }}
+        tabIndex={0}
+      >
+        {/* Food */}
+        <div
+          className="absolute rounded-full"
+          style={{
+            width: cellPx - 2,
+            height: cellPx - 2,
+            left: food[0] * cellPx + 1,
+            top: food[1] * cellPx + 1,
+            background: "#dc2626",
+            boxShadow: "0 0 6px #dc2626",
+          }}
+        />
+        {/* Snake */}
+        {snake.map(([x, y], i) => (
+          <div
+            key={`${x}-${y}-${i}`}
+            className="absolute rounded-sm"
+            style={{
+              width: cellPx - 2,
+              height: cellPx - 2,
+              left: x * cellPx + 1,
+              top: y * cellPx + 1,
+              background: i === 0 ? "#0f172a" : "#C89B2C",
+              borderRadius: i === 0 ? 4 : 2,
+            }}
+          />
+        ))}
+        {/* Overlay when idle / game over */}
+        {(!running || gameOver) && (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-900/40">
+            <div className="text-center px-3 py-2 bg-white rounded-sm shadow">
+              <p className="text-sm font-bold text-primary-900">
+                {gameOver ? "Game over!" : "Ready?"}
+              </p>
+              <button
+                type="button"
+                onClick={start}
+                className="mt-2 text-xs font-bold text-white bg-primary-900 rounded-sm px-4 py-1.5 hover:bg-primary-800"
+              >
+                {gameOver ? "Play again" : "Start"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* On-screen d-pad for touch */}
+      <div className="mt-3 grid grid-cols-3 gap-1 select-none">
+        <div />
+        <button type="button" aria-label="Up" onClick={() => tryTurn([0, -1])} disabled={!running}
+          className="w-9 h-9 rounded-sm bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold disabled:opacity-40">▲</button>
+        <div />
+        <button type="button" aria-label="Left" onClick={() => tryTurn([-1, 0])} disabled={!running}
+          className="w-9 h-9 rounded-sm bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold disabled:opacity-40">◀</button>
+        <button type="button" aria-label="Down" onClick={() => tryTurn([0, 1])} disabled={!running}
+          className="w-9 h-9 rounded-sm bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold disabled:opacity-40">▼</button>
+        <button type="button" aria-label="Right" onClick={() => tryTurn([1, 0])} disabled={!running}
+          className="w-9 h-9 rounded-sm bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold disabled:opacity-40">▶</button>
+      </div>
+    </div>
+  );
+}
+
