@@ -12,6 +12,14 @@ export default function LoginPage() {
   const [showLockout, setShowLockout] = useState(false);
   const [lockoutMessage, setLockoutMessage] = useState("");
 
+  // Live maintenance kill-switch. When maintenance flips ON, the login page
+  // immediately shows the lockout popup (with the game). Exempt admins can
+  // continue past it to sign in; non-exempt users stay blocked afterward.
+  useEffect(() => {
+    setShowLockout(maintenance.enabled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maintenance.enabled]);
+
   // Live maintenance kill-switch.
   useEffect(() => {
     const unsub = authService.subscribeToMaintenance(setMaintenance);
@@ -63,6 +71,11 @@ export default function LoginPage() {
   }
 
   function closeLockout() {
+    setShowLockout(false);
+    setLockoutMessage("");
+  }
+
+  function continuePastLockout() {
     setShowLockout(false);
     setLockoutMessage("");
   }
@@ -159,10 +172,13 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Lockout modal for non-exempt sign-in attempt during maintenance */}
+      {/* Lockout modal: shows on page load when maintenance is ON, and again
+          after a non-exempt sign-in attempt. Exempt admins click "Continue to
+          sign in" to pass it. */}
       <LockoutModal
         isOpen={showLockout && maintenance.enabled}
         onClose={closeLockout}
+        onContinue={continuePastLockout}
         message={lockoutMessage || maintenance.message}
       />
     </div>
@@ -172,7 +188,7 @@ export default function LoginPage() {
 /**
  * Lockout modal shown when non-exempt user attempts sign-in during maintenance.
  */
-function LockoutModal({ isOpen, onClose, message }: { isOpen: boolean; onClose: () => void; message: string }) {
+function LockoutModal({ isOpen, onClose, onContinue, message }: { isOpen: boolean; onClose: () => void; onContinue: () => void; message: string }) {
   const [score, setScore] = useState(0);
   const [pos, setPos] = useState({ top: 30, left: 30 });
   const [hit, setHit] = useState(false);
@@ -238,6 +254,14 @@ function LockoutModal({ isOpen, onClose, message }: { isOpen: boolean; onClose: 
         <p className="text-xs text-slate-400">
           Only exempt administrators can access the system during maintenance.
         </p>
+        <div className="mt-6">
+          <Button onClick={onContinue} className="w-full" size="lg">
+            Continue to sign in
+          </Button>
+          <p className="mt-2 text-xs text-slate-400">
+            Administrators only — if your account is exempt you can sign in now.
+          </p>
+        </div>
       </div>
     </Modal>
   );
