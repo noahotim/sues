@@ -71,6 +71,10 @@ export default function LoginPage() {  const navigate = useNavigate();
         redirecting={redirecting}
         onAdminSignIn={async (email) => {
           setError("");
+          // Only a properly formatted email is accepted, even here.
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return; // the lockout screen already surfaces the format error
+          }
           // Only the configured Administrator email may proceed to Google.
           const isAdmin = await isConfiguredMaintenanceAdmin(email);
           if (!isAdmin) {
@@ -182,6 +186,16 @@ function LockoutScreen({
   onAdminSignIn: (email: string) => void;
 }) {
   const [email, setEmail] = useState("");
+  // Only a properly formatted email is accepted, even for the Administrator
+  // sign-in gate.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const trimmed = email.trim();
+  const emailValid = EMAIL_RE.test(trimmed);
+
+  function attemptSignIn() {
+    if (!trimmed || !emailValid || submitting || redirecting) return;
+    onAdminSignIn(trimmed);
+  }
 
   return (
     <div
@@ -224,15 +238,25 @@ function LockoutScreen({
             disabled={submitting || redirecting}
             onChange={(e) => setEmail(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && email.trim() && !submitting && !redirecting) {
-                onAdminSignIn(email.trim());
+              if (e.key === "Enter" && emailValid && !submitting && !redirecting) {
+                attemptSignIn();
               }
             }}
-            className="w-full rounded-sm border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-900 disabled:opacity-60"
+            className={
+              "w-full rounded-sm border bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 disabled:opacity-60 " +
+              (trimmed && !emailValid
+                ? "border-red-400 focus:ring-red-500"
+                : "border-slate-300 focus:ring-primary-900")
+            }
           />
+          {trimmed && !emailValid && (
+            <p className="mt-1.5 text-xs text-red-700">
+              Please enter a valid email address (e.g. name@example.com).
+            </p>
+          )}
           <Button
-            onClick={() => email.trim() && onAdminSignIn(email.trim())}
-            disabled={!email.trim() || submitting || redirecting}
+            onClick={attemptSignIn}
+            disabled={!emailValid || submitting || redirecting}
             className="w-full mt-3"
             size="lg"
           >
