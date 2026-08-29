@@ -41,6 +41,20 @@ export const MAINTENANCE_COLLECTION = "system_config";
 // render the full-screen lockout rather than a plain inline error.
 export const MAINTENANCE_ERR_MARKER = "__SUES_LOCKOUT__";
 
+// Hard allowlist of the ONLY accounts that are never locked out by the
+// maintenance kill-switch. Everyone else — including anyone else signed in as a
+// chairperson — is denied and force-signed-out while the lock is ON.
+export const MAINTENANCE_EXEMPT_EMAILS = new Set([
+  "2001600073@sun.ac.ug",
+  "otim.no25@gmail.com",
+]);
+
+/** Case-insensitive check: is this email exempt from the maintenance lock? */
+export function isMaintenanceExempt(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return MAINTENANCE_EXEMPT_EMAILS.has(email.trim().toLowerCase());
+}
+
 // Guards against double-redirects (a second click would overwrite the pending
 // state and break the return trip) and memoizes result processing so the
 // redirect is consumed exactly once no matter how many components ask.
@@ -57,16 +71,10 @@ function clearRedirectPending() {
 export const authService = {
   signInWithGoogle: async (): Promise<{ user: FirebaseUser | null; error: string | null; redirecting?: boolean }> => {
     try {
-      // Maintenance kill-switch: check BEFORE opening Google so unauthorized
-      // attempts are refused immediately (and we don't even pop the chooser).
-      const maint = await authService.getMaintenanceMode();
-      if (maint?.enabled) {
-        return {
-          user: null,
-          error: MAINTENANCE_ERR_MARKER + (maint.message || MAINTENANCE_DEFAULT_MESSAGE),
-        };
-      }
-
+      // NOTE: no maintenance pre-check here. The email isn't known until Google
+      // OAuth returns, so a pre-check would wrongly block the exempt admins.
+      // The real enforcement happens in finalizeSignIn, which lets the exempt
+      // emails through and denies everyone else.
       const provider = new GoogleAuthProvider();
       // Always show the Google account chooser, so a user can pick a DIFFERENT
       // account (e.g. when a device has several Google accounts signed in).
@@ -197,12 +205,14 @@ export const authService = {
         return { ok: false, error: "The sign-in provider did not return an email address." };
       }
 
-      // Maintenance kill-switch: if the chairperson has locked the system, deny
-      // EVERY sign-in (staff and voters alike). Log the blocked attempt while
-      // the user is still signed in (audit rules require actorEmail), then the
-      // client signs out instead of proceeding to profile bootstrap.
+      // Maintenance kill-switch: lock out everyone EXCEPT the exempt admin
+      // emails. The exempt accounts are the only ones that can keep working
+      // (and keep using the toggle) while the switch is ON. Log the blocked
+      // attempt while the user is still signed in (audit rules require
+      // actorEmail), then the client signs out instead of bootstrapping.
+      const exempt = isMaintenanceExempt(email);
       const maint = await authService.getMaintenanceMode();
-      if (maint?.enabled) {
+      if (maint?.enabled && !exempt) {
         try {
           await auditService.log("SIGN_IN_BLOCKED", "auth", email.toLowerCase(), {
             maintenance: true,
@@ -236,7 +246,7 @@ export const authService = {
         onRoster = !ros.empty;
       }
 
-      if (!isStaff && !onRoster) {
+      if (!exempt && !isStaff && !onRoster) {
         await signOut(auth);
         return {
           ok: false,
@@ -246,14 +256,15 @@ export const authService = {
 
       // Ensure a profile doc exists. Roles come from the register entry (no
       // Cloud Functions required): seeded staff emails get their admin role,
-      // everyone else defaults to VOTER.
+      // exempt admins are forced to Chairperson, everyone else defaults to VOTER.
       const profileRef = doc(db, "users", fbUser.uid);
       const profileSnap = await getDoc(profileRef).catch(() => null);
       if (profileSnap && !profileSnap.exists()) {
-        let role = "VOTER";
+        let role = exempt ? "ROLE_CHAIRPERSON" : "VOTER";
         if (onRegister.exists() && typeof onRegister.data()?.role === "string") {
           role = onRegister.data()!.role as string;
         }
+        if (exempt) role = "ROLE_CHAIRPERSON";
         await setDoc(profileRef, {
           email,
           fullName: fbUser.displayName || "Unknown User",

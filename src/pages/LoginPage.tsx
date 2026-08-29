@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authService, MAINTENANCE_ERR_MARKER, MAINTENANCE_DEFAULT_MESSAGE, type MaintenanceMode } from "../services";
-import { Button, Spinner } from "../components/ui";
+import { Button, Spinner, Modal } from "../components/ui";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -9,10 +9,10 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [maintenance, setMaintenance] = useState<MaintenanceMode>({ enabled: false, message: MAINTENANCE_DEFAULT_MESSAGE });
+  const [showLockout, setShowLockout] = useState(false);
+  const [lockoutMessage, setLockoutMessage] = useState("");
 
-  // Live maintenance kill-switch. When the chairperson locks the system the
-  // login screen immediately shows the CONTACT NOAH lockout and refuses entry;
-  // it recovers automatically once the lock is lifted.
+  // Live maintenance kill-switch.
   useEffect(() => {
     const unsub = authService.subscribeToMaintenance(setMaintenance);
     return () => unsub();
@@ -26,7 +26,8 @@ export default function LoginPage() {
         navigate("/admin/dashboard", { replace: true });
       } else if (res.error) {
         if (res.error.startsWith(MAINTENANCE_ERR_MARKER)) {
-          setMaintenance({ enabled: true, message: res.error.replace(MAINTENANCE_ERR_MARKER, "") });
+          setLockoutMessage(res.error.replace(MAINTENANCE_ERR_MARKER, ""));
+          setShowLockout(true);
         } else {
           setError(res.error);
         }
@@ -46,7 +47,8 @@ export default function LoginPage() {
       }
       if (error || !user) {
         if (error && error.startsWith(MAINTENANCE_ERR_MARKER)) {
-          setMaintenance({ enabled: true, message: error.replace(MAINTENANCE_ERR_MARKER, "") });
+          setLockoutMessage(error.replace(MAINTENANCE_ERR_MARKER, ""));
+          setShowLockout(true);
         } else {
           setError(error || "Authentication failed");
         }
@@ -60,37 +62,9 @@ export default function LoginPage() {
     }
   }
 
-  // Maintenance lockout: a firm full-screen block on every sign-in attempt.
-  if (maintenance.enabled) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-primary-900 p-6 relative overflow-hidden">
-        {/* hard block pattern for a DDoS-style lockdown feel */}
-        <div
-          className="absolute inset-0 opacity-10"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(45deg, #fff 0 2px, transparent 2px 14px)",
-          }}
-        />
-        <div className="w-full max-w-lg bg-white border-l-4 border-red-600 shadow-2xl p-8 text-center relative z-10">
-          <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-red-600 flex items-center justify-center">
-            <svg viewBox="0 0 24 24" className="w-9 h-9 text-white fill-current" aria-hidden>
-              <path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4Zm0 2.18 7 3.11v5.7c0 4.5-2.92 8.67-7 10-4.08-1.33-7-5.5-7-10v-5.7l7-3.11ZM11 7v6h2V7h-2Zm0 8v2h2v-2h-2Z" />
-            </svg>
-          </div>
-          <p className="text-xs font-bold tracking-[0.3em] text-red-600 uppercase mb-2">
-            Access Denied — System Locked
-          </p>
-          <h1 className="text-2xl font-extrabold text-primary-900 tracking-tight mb-3">
-            CONTACT NOAH
-          </h1>
-          <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line mb-2">
-            {maintenance.message.split("\n")[0]}
-          </p>
-          <LockoutGame />
-        </div>
-      </div>
-    );
+  function closeLockout() {
+    setShowLockout(false);
+    setLockoutMessage("");
   }
 
   return (
@@ -106,6 +80,21 @@ export default function LoginPage() {
           <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">Elections Portal</h1>
         </div>
 
+        {/* Maintenance banner (informational only) */}
+        {maintenance.enabled && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-sm text-center">
+            <p className="text-sm font-medium text-amber-900">
+              System Maintenance Active
+            </p>
+            <p className="text-xs text-amber-800 mt-1">
+              {maintenance.message.split("\n")[0]}
+            </p>
+            <p className="text-xs text-amber-700 mt-2">
+              Exempt administrators can sign in normally. Others will be blocked.
+            </p>
+          </div>
+        )}
+
         <div className="bg-white border-t-2 border-primary-900 p-8 flex flex-col gap-6 shadow-sm rounded-sm bg-slate-50">
           {error && (
             <div className="text-sm text-error-700 bg-error-50 border border-error-200 rounded-sm px-4 py-3">
@@ -120,7 +109,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <Button onClick={handleGoogleSignIn} disabled={submitting || redirecting} className="w-full" size="lg">
+          <Button onClick={handleGoogleSignIn} disabled={submitting || redirecting || showLockout} className="w-full" size="lg">
             {submitting || redirecting ? "Signing in..." : "Sign in with Google"}
           </Button>
 
@@ -169,65 +158,87 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
+      {/* Lockout modal for non-exempt sign-in attempt during maintenance */}
+      <LockoutModal
+        isOpen={showLockout && maintenance.enabled}
+        onClose={closeLockout}
+        message={lockoutMessage || maintenance.message}
+      />
     </div>
   );
 }
 
 /**
- * A tiny distraction to play while the system is locked: click the moving dot.
- * Fully self-contained (no dependencies, no state shared with the app).
+ * Lockout modal shown when non-exempt user attempts sign-in during maintenance.
  */
-function LockoutGame() {
+function LockoutModal({ isOpen, onClose, message }: { isOpen: boolean; onClose: () => void; message: string }) {
   const [score, setScore] = useState(0);
   const [pos, setPos] = useState({ top: 30, left: 30 });
   const [hit, setHit] = useState(false);
   const [best, setBest] = useState(0);
 
-  function handleHit() {
-    const box = 300; // game area px
-    const dot = 40;
-    const top = Math.floor(Math.random() * (box - dot));
-    const left = Math.floor(Math.random() * (box - dot));
-    setPos({ top, left });
-    setScore((s) => {
-      const next = s + 1;
-      setBest((b) => Math.max(b, next));
-      return next;
-    });
-    setHit(true);
-    window.setTimeout(() => setHit(false), 120);
-  }
-
   return (
-    <div className="mt-4 border-t border-slate-200 pt-4">
-      <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
-        Pass the time — catch the dot
-      </p>
-      <div
-        className="relative bg-slate-100 rounded-sm border border-slate-200 overflow-hidden mx-auto"
-        style={{ width: 300, height: 180 }}
-      >
-        <button
-          type="button"
-          aria-label="Catch the dot"
-          onClick={handleHit}
-          className="absolute rounded-full cursor-pointer transition-transform"
-          style={{
-            width: 40,
-            height: 40,
-            top: pos.top,
-            left: pos.left,
-            background: hit ? "#dc2626" : "#C89B2C",
-            boxShadow: `0 0 ${hit ? 20 : 10}px ${hit ? "#dc2626" : "#C89B2C"}`,
-            transform: hit ? "scale(0.85)" : "scale(1)",
-          }}
-        />
+    <Modal open={isOpen} onClose={onClose} title="Access Denied — System Locked" maxWidth="520px">
+      <div className="text-center">
+        <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-red-600 flex items-center justify-center">
+          <svg viewBox="0 0 24 24" className="w-9 h-9 text-white fill-current" aria-hidden>
+            <path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4Zm0 2.18 7 3.11v5.7c0 4.5-2.92 8.67-7 10-4.08-1.33-7-5.5-7-10v-5.7l7-3.11ZM11 7v6h2V7h-2Zm0 8v2h2v-2h-2Z" />
+          </svg>
+        </div>
+        <h2 className="text-2xl font-extrabold text-primary-900 tracking-tight mb-3">
+          CONTACT NOAH
+        </h2>
+        <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line mb-4">
+          {message.split("\n")[0]}
+        </p>
+        <div className="mb-4 border-t border-slate-200 pt-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
+            Pass the time — catch the dot
+          </p>
+          <div
+            className="relative bg-slate-100 rounded-sm border border-slate-200 overflow-hidden mx-auto"
+            style={{ width: 300, height: 180 }}
+          >
+            <button
+              type="button"
+              aria-label="Catch the dot"
+              onClick={() => {
+                const box = 300;
+                const dot = 40;
+                const top = Math.floor(Math.random() * (box - dot));
+                const left = Math.floor(Math.random() * (box - dot));
+                setPos({ top, left });
+                setScore((s) => {
+                  const next = s + 1;
+                  setBest((b) => Math.max(b, next));
+                  return next;
+                });
+                setHit(true);
+                window.setTimeout(() => setHit(false), 120);
+              }}
+              className="absolute rounded-full cursor-pointer transition-transform"
+              style={{
+                width: 40,
+                height: 40,
+                top: pos.top,
+                left: pos.left,
+                background: hit ? "#dc2626" : "#C89B2C",
+                boxShadow: `0 0 ${hit ? 20 : 10}px ${hit ? "#dc2626" : "#C89B2C"}`,
+                transform: hit ? "scale(0.85)" : "scale(1)",
+              }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-slate-600">
+            Score: <span className="font-bold text-primary-900">{score}</span>
+            <span className="mx-2 text-slate-300">•</span>
+            Best: <span className="font-bold text-primary-900">{best}</span>
+          </p>
+        </div>
+        <p className="text-xs text-slate-400">
+          Only exempt administrators can access the system during maintenance.
+        </p>
       </div>
-      <p className="mt-2 text-xs text-slate-600">
-        Score: <span className="font-bold text-primary-900">{score}</span>
-        <span className="mx-2 text-slate-300">•</span>
-        Best: <span className="font-bold text-primary-900">{best}</span>
-      </p>
-    </div>
+    </Modal>
   );
 }
