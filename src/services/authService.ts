@@ -41,18 +41,45 @@ export const MAINTENANCE_COLLECTION = "system_config";
 // render the full-screen lockout rather than a plain inline error.
 export const MAINTENANCE_ERR_MARKER = "__SUES_LOCKOUT__";
 
+// Role id for the owner/Administrator. Anyone assigned this role (via the
+// register / User Management) is exempt from the maintenance kill-switch.
+export const ROLE_ADMINISTRATOR = "ROLE_ADMINISTRATOR";
+
 // Hard allowlist of the ONLY accounts that are never locked out by the
-// maintenance kill-switch. Everyone else — including anyone else signed in as a
-// chairperson — is denied and force-signed-out while the lock is ON.
+// maintenance kill-switch — a safety net so the owner is never locked out even
+// if their Administrator role is ever removed from the register. Everyone else
+// — including anyone signed in as chairperson but without the Administrator
+// role — is denied and force-signed-out while the lock is ON.
 export const MAINTENANCE_EXEMPT_EMAILS = new Set([
   "2001600073@sun.ac.ug",
   "otim.no25@gmail.com",
 ]);
 
-/** Case-insensitive check: is this email exempt from the maintenance lock? */
+/** Case-insensitive check: is this email in the hard-coded safety net? */
 export function isMaintenanceExempt(email: string | null | undefined): boolean {
   if (!email) return false;
   return MAINTENANCE_EXEMPT_EMAILS.has(email.trim().toLowerCase());
+}
+
+/**
+ * Role-aware maintenance exemption (async). A user is exempt if their email is
+ * in the hard-coded safety net, OR they hold the Administrator role on the
+ * register (eligible_emails/{email}). This lets the chairperson grant/revoke
+ * maintenance access by assigning the Administrator role via User Management.
+ */
+export async function isAdminForMaintenance(
+  email: string | null | undefined
+): Promise<boolean> {
+  if (!email) return false;
+  const em = email.trim().toLowerCase();
+  // Safety net first – the owner can never be locked out.
+  if (MAINTENANCE_EXEMPT_EMAILS.has(em)) return true;
+  try {
+    const snap = await getDoc(doc(db, "eligible_emails", em));
+    return snap.exists() && snap.data()?.role === ROLE_ADMINISTRATOR;
+  } catch {
+    return false;
+  }
 }
 
 // Guards against double-redirects (a second click would overwrite the pending
@@ -205,12 +232,18 @@ export const authService = {
         return { ok: false, error: "The sign-in provider did not return an email address." };
       }
 
-      // Maintenance kill-switch: lock out everyone EXCEPT the exempt admin
-      // emails. The exempt accounts are the only ones that can keep working
-      // (and keep using the toggle) while the switch is ON. Log the blocked
-      // attempt while the user is still signed in (audit rules require
-      // actorEmail), then the client signs out instead of bootstrapping.
-      const exempt = isMaintenanceExempt(email);
+      // Maintenance kill-switch: lock out everyone EXCEPT the Administrator
+      // role (assigned via User Management) or the hard-coded owner safety net.
+      // Log the blocked attempt while the user is still signed in (audit rules
+      // require actorEmail), then the client signs out instead of bootstrapping.
+      const onRegister = await getDoc(doc(db, "eligible_emails", email));
+      const regRole =
+        onRegister.exists() && typeof onRegister.data()?.role === "string"
+          ? (onRegister.data()!.role as string)
+          : "";
+      const isAdmin = regRole === ROLE_ADMINISTRATOR;
+      // Owner safety net always counts as Administrator.
+      const exempt = isMaintenanceExempt(email) || isAdmin;
       const maint = await authService.getMaintenanceMode();
       if (maint?.enabled && !exempt) {
         try {
@@ -231,11 +264,6 @@ export const authService = {
       // present on an actual election roster may use the system. A plain VOTER
       // register entry with no roster row anywhere is NOT sufficient - it only
       // grants system-wide eligibility once they've been uploaded to a roster.
-      const onRegister = await getDoc(doc(db, "eligible_emails", email));
-      const regRole =
-        onRegister.exists() && typeof onRegister.data()?.role === "string"
-          ? (onRegister.data()!.role as string)
-          : "";
       const isStaff = regRole !== "" && regRole !== "VOTER";
 
       let onRoster = false;
@@ -256,15 +284,30 @@ export const authService = {
 
       // Ensure a profile doc exists. Roles come from the register entry (no
       // Cloud Functions required): seeded staff emails get their admin role,
-      // exempt admins are forced to Chairperson, everyone else defaults to VOTER.
+      // exempt admins are forced to Administrator, everyone else defaults to
+      // VOTER.
+      if (exempt && regRole !== ROLE_ADMINISTRATOR && !onRegister.exists()) {
+        // Seed the register so the Administrator role persists (and shows up in
+        // User Management) even though the account is exempt by safety net.
+        try {
+          await setDoc(doc(db, "eligible_emails", email), {
+            email,
+            fullName: fbUser.displayName || "Administrator",
+            role: ROLE_ADMINISTRATOR,
+            addedAt: serverTimestamp(),
+          });
+        } catch {
+          /* register create may be restricted; profile still carries the role */
+        }
+      }
       const profileRef = doc(db, "users", fbUser.uid);
       const profileSnap = await getDoc(profileRef).catch(() => null);
       if (profileSnap && !profileSnap.exists()) {
-        let role = exempt ? "ROLE_CHAIRPERSON" : "VOTER";
+        let role = exempt ? ROLE_ADMINISTRATOR : "VOTER";
         if (onRegister.exists() && typeof onRegister.data()?.role === "string") {
           role = onRegister.data()!.role as string;
         }
-        if (exempt) role = "ROLE_CHAIRPERSON";
+        if (exempt) role = ROLE_ADMINISTRATOR;
         await setDoc(profileRef, {
           email,
           fullName: fbUser.displayName || "Unknown User",

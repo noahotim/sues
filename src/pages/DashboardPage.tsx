@@ -34,15 +34,16 @@ export default function DashboardPage() {
   const [maintenance, setMaintenance] = useState<MaintenanceMode>({ enabled: false, message: MAINTENANCE_DEFAULT_MESSAGE });
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
 
-  const isChairperson = role?.id === "ROLE_CHAIRPERSON";
+  const isAdmin = role?.id === "ROLE_ADMINISTRATOR";
+  const canManageMaintenance = isAdmin || role?.id === "ROLE_CHAIRPERSON";
 
-  // Current maintenance kill-switch (chairperson sees + can toggle it).
+  // Current maintenance kill-switch (Administrator/Chairperson sees + can toggle it).
   useEffect(() => {
-    if (!isChairperson) return;
+    if (!canManageMaintenance) return;
     authService.getMaintenanceMode().then((m) => {
       if (m) setMaintenance(m);
     });
-  }, [isChairperson]);
+  }, [canManageMaintenance]);
 
   async function toggleMaintenance() {
     setMaintenanceBusy(true);
@@ -190,8 +191,8 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Maintenance kill-switch (chairperson only) */}
-      {isChairperson && (
+      {/* Maintenance kill-switch (Administrator/Chairperson only) */}
+      {canManageMaintenance && (
         <Card className="p-6 rounded-sm shadow-none border-t-4 border-t-red-600">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-start gap-3">

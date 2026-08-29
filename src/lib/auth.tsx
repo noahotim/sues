@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { authService, UserProfile, isMaintenanceExempt } from "../services";
+import { authService, UserProfile, isAdminForMaintenance } from "../services";
 import { ROLE_PERMISSIONS, ROLES } from "./constants";
 import type { User as FirebaseUser } from "firebase/auth";
 import { getAuth, signOut } from "firebase/auth";
@@ -113,15 +113,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Maintenance kill-switch: the moment it flips ON, force every signed-in user
   // out and tell them with a popup. This catches users already logged in (they
-  // never re-run the sign-in gate), on every route. Exempt emails skip sign-out
-  // and remain logged in.
+  // never re-run the sign-in gate), on every route. Users holding the
+  // Administrator role (or the owner safety-net email) skip sign-out and remain
+  // logged in.
   useEffect(() => {
     maintenanceWasEnabled.current = false;
 const unsub = authService.subscribeToMaintenance(async (mode) => {
         const nowEnabled = mode.enabled;
         if (nowEnabled && !maintenanceWasEnabled.current && session) {
-          // Check if the current user is exempt; if so, skip sign-out and stay silent.
-          const exempt = isMaintenanceExempt(session.user.email);
+          // Check if the current user is an Administrator; if so, skip sign-out
+          // and stay silent.
+          const exempt = await isAdminForMaintenance(session.user.email);
           if (!exempt) {
             if (!alertShownForLock.current) {
               alertShownForLock.current = true;

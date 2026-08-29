@@ -82,6 +82,7 @@ export default function UsersPage() {
   }
 
   function getRoleBadgeVariant(roleId: string): "neutral" | "primary" | "success" | "warning" {
+    if (roleId === "ROLE_ADMINISTRATOR") return "warning";
     if (roleId === "ROLE_CHAIRPERSON") return "primary";
     if (roleId === "ROLE_SECRETARY") return "success";
     if (roleId === "ROLE_ASSISTANT") return "warning";

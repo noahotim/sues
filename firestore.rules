@@ -19,13 +19,13 @@ service cloud.firestore {
         : '';
     }
     function isAdminRole() {
-      return myRole() == 'ROLE_CHAIRPERSON' || myRole() == 'ROLE_SECRETARY' || myRole() == 'ROLE_ASSISTANT';
+      return myRole() == 'ROLE_ADMINISTRATOR' || myRole() == 'ROLE_CHAIRPERSON' || myRole() == 'ROLE_SECRETARY' || myRole() == 'ROLE_ASSISTANT';
     }
     function isChairperson() {
-      return myRole() == 'ROLE_CHAIRPERSON';
+      return myRole() == 'ROLE_ADMINISTRATOR' || myRole() == 'ROLE_CHAIRPERSON';
     }
     function isElectionManager() {
-      return myRole() == 'ROLE_CHAIRPERSON' || myRole() == 'ROLE_SECRETARY';
+      return myRole() == 'ROLE_ADMINISTRATOR' || myRole() == 'ROLE_CHAIRPERSON' || myRole() == 'ROLE_SECRETARY';
     }
     function electionStatus(electionId) {
       return get(/databases/$(database)/documents/elections/$(electionId)).data.status;
@@ -74,8 +74,8 @@ service cloud.firestore {
         (request.auth.uid == userId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName']))
         ||
-        // chairperson assigns roles
-        (myRole() == 'ROLE_CHAIRPERSON'
+        // chairperson/administrator assigns roles
+        (myRole() == 'ROLE_ADMINISTRATOR' || myRole() == 'ROLE_CHAIRPERSON'
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'updatedAt']))
       );
       allow delete: if false;

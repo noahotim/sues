@@ -11,6 +11,17 @@ export const PERMISSIONS = {
 };
 
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
+  'ROLE_ADMINISTRATOR': [
+    PERMISSIONS.VIEW_DASHBOARD,
+    PERMISSIONS.MANAGE_ELECTIONS,
+    PERMISSIONS.MANAGE_CANDIDATES,
+    PERMISSIONS.MANAGE_ROSTER,
+    PERMISSIONS.VIEW_RESULTS,
+    PERMISSIONS.MANAGE_USERS,
+    PERMISSIONS.VIEW_AUDIT_LOGS,
+    PERMISSIONS.PUBLISH_RESULTS,
+    PERMISSIONS.VOTE
+  ],
   'ROLE_CHAIRPERSON': [
     PERMISSIONS.VIEW_DASHBOARD,
     PERMISSIONS.MANAGE_ELECTIONS,
@@ -42,6 +53,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
 };
 
 export const ROLES = [
+  { id: 'ROLE_ADMINISTRATOR', label: 'Administrator', description: 'Owner: full access, exempt from maintenance lock', is_admin: true },
   { id: 'ROLE_CHAIRPERSON', label: 'Chairperson', description: 'Full system access', is_admin: true },
   { id: 'ROLE_SECRETARY', label: 'Secretary', description: 'Manages elections, candidates, and roster', is_admin: true },
   { id: 'ROLE_ASSISTANT', label: 'Polling Assistant', description: 'Assists with voter verification', is_admin: true },
