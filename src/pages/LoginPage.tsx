@@ -277,6 +277,22 @@ function SnakeGame() {
   const [, setTick] = useState(0);
   const [best, setBest] = useState(0);
 
+  // Speed levels -> tick interval in ms. Persisted so the user's preference
+  // survives reloads. Changing speed mid-game restarts the loop immediately.
+  const SPEEDS: Record<string, number> = {
+    Slow: 260,
+    Normal: 160,
+    Fast: 90,
+  };
+  const SPEED_ORDER = ["Slow", "Normal", "Fast"];
+  const [speed, setSpeed] = useState<string>(() => {
+    try {
+      const stored = localStorage.getItem("sues_snake_speed");
+      if (stored && stored in SPEEDS) return stored;
+    } catch { /* ignore */ }
+    return "Normal";
+  });
+
   const render = () => setTick((t) => t + 1);
 
   // Restrict turns so the snake can't reverse into itself.
@@ -379,10 +395,10 @@ function SnakeGame() {
         g.food = spawnFood(next);
       }
       render();
-    }, 130);
+    }, SPEEDS[speed]);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game.current.running]);
+  }, [game.current.running, speed]);
 
   // Load best score once.
   useEffect(() => {
@@ -427,6 +443,33 @@ function SnakeGame() {
         <span>
           Best: <span className="font-bold text-primary-900">{best}</span>
         </span>
+      </div>
+      {/* Speed control */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+          Speed
+        </span>
+        <div className="flex rounded-sm border border-slate-300 overflow-hidden" role="group" aria-label="Snake speed">
+          {SPEED_ORDER.map((s) => (
+            <button
+              key={s}
+              type="button"
+              aria-pressed={speed === s}
+              onClick={() => {
+                setSpeed(s);
+                try { localStorage.setItem("sues_snake_speed", s); } catch { /* ignore */ }
+              }}
+              className={
+                "px-2.5 py-1 text-[11px] font-bold transition-colors " +
+                (speed === s
+                  ? "bg-primary-900 text-white"
+                  : "bg-white text-slate-600 hover:bg-slate-100")
+              }
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
       <div
         className="relative bg-slate-100 rounded-sm border border-slate-200 overflow-hidden"
