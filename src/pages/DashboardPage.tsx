@@ -225,7 +225,7 @@ export default function DashboardPage() {
                 </h2>
                 <p className="text-sm text-slate-600">
                   {maintenance.enabled
-                    ? "The system is LOCKED. All sign-ins are denied and everyone sees the CONTACT NOAH lockout until you reopen."
+                    ? "The system is LOCKED. Only the Administrator email(s) you set below can sign in; everyone else sees the CONTACT NOAH lockout."
                     : "The system is open. Turn the lock ON to deny every sign-in and show the CONTACT NOAH lockout."}
                 </p>
               </div>
@@ -265,8 +265,8 @@ export default function DashboardPage() {
               </Button>
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Only these emails can reach Google sign-in while the system is locked. Everyone else
-              sees the CONTACT NOAH lockout.
+              Nothing is set by default. Only the email(s) you list here (or that you assign the
+              Administrator role to in User Management) can sign in while the lock is ON.
             </p>
           </div>
         </Card>

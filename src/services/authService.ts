@@ -50,47 +50,38 @@ export const ROLE_ADMINISTRATOR = "ROLE_ADMINISTRATOR";
 // gate who reaches the Google account chooser).
 export const MAINTENANCE_ADMINS_DOC = "admin_emails";
 
-// Hard allowlist of the ONLY accounts that are never locked out by the
-// maintenance kill-switch — a safety net so the owner is never locked out even
-// if their Administrator role is ever removed from the register. Everyone else
-// — including anyone signed in as chairperson but without the Administrator
-// role — is denied and force-signed-out while the lock is ON.
-export const MAINTENANCE_EXEMPT_EMAILS = new Set([
-  "2001600073@sun.ac.ug",
-  "otim.no25@gmail.com",
-]);
-
-/** Case-insensitive check: is this email in the hard-coded safety net? */
-export function isMaintenanceExempt(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return MAINTENANCE_EXEMPT_EMAILS.has(email.trim().toLowerCase());
-}
+// The maintenance allow-list is NOT defaulted to any email. The admin decides
+// who may sign in during maintenance by (a) assigning the Administrator role to
+// an email via User Management, and/or (b) saving that email in the Dashboard
+// maintenance card (stored in system_config/admin_emails). Without either, no
+// one is allowed through and everyone sees the CONTACT NOAH lockout.
 
 /**
- * Role-aware maintenance exemption (async). A user is exempt if their email is
- * in the hard-coded safety net, OR they hold the Administrator role on the
- * register (eligible_emails/{email}). This lets the chairperson grant/revoke
- * maintenance access by assigning the Administrator role via User Management.
+ * Maintenance exemption (async). A user is exempt from the maintenance lock if
+ * they hold the Administrator role on the register (eligible_emails/{email}),
+ * OR their email is in the admin-saved allow-list. No email is defaulted.
  */
 export async function isAdminForMaintenance(
   email: string | null | undefined
 ): Promise<boolean> {
   if (!email) return false;
   const em = email.trim().toLowerCase();
-  // Safety net first – the owner can never be locked out.
-  if (MAINTENANCE_EXEMPT_EMAILS.has(em)) return true;
   try {
     const snap = await getDoc(doc(db, "eligible_emails", em));
-    return snap.exists() && snap.data()?.role === ROLE_ADMINISTRATOR;
+    if (snap.exists() && snap.data()?.role === ROLE_ADMINISTRATOR) return true;
   } catch {
-    return false;
+    /* fall through to allow-list check */
   }
+  const allowed = await getMaintenanceAdminEmails();
+  return allowed.includes(em);
 }
 
 /**
  * The Administrator email(s) allowed to sign in while maintenance is ON, read
- * from the (publicly readable) system_config/admin_emails doc. Falls back to
- * the hard-coded owner safety net so the owner is never locked out.
+ * from the (publicly readable) system_config/admin_emails doc. When nothing is
+ * saved yet this returns an EMPTY list – no email is defaulted. The admin sets
+ * who is allowed by saving email(s) in the Dashboard maintenance card (which is
+ * the same as assigning the Administrator role to those emails).
  */
 export async function getMaintenanceAdminEmails(): Promise<string[]> {
   try {
@@ -103,9 +94,9 @@ export async function getMaintenanceAdminEmails(): Promise<string[]> {
       if (cleaned.length > 0) return Array.from(new Set(cleaned));
     }
   } catch {
-    /* fall through to safety net */
+    /* fall through to empty */
   }
-  return Array.from(MAINTENANCE_EXEMPT_EMAILS);
+  return [];
 }
 
 /** Case-insensitive check against the configured maintenance admin list. */
@@ -303,8 +294,9 @@ export const authService = {
           ? (onRegister.data()!.role as string)
           : "";
       const isAdmin = regRole === ROLE_ADMINISTRATOR;
-      // Owner safety net always counts as Administrator.
-      const exempt = isMaintenanceExempt(email) || isAdmin;
+      // Exemption comes only from the Administrator role or the admin-saved
+      // allow-list — nothing is defaulted.
+      const exempt = isAdmin || (await isConfiguredMaintenanceAdmin(email));
       const maint = await authService.getMaintenanceMode();
       if (maint?.enabled && !exempt) {
         try {
