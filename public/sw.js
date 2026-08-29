@@ -8,7 +8,7 @@
  *    lockout screen and its Snake game) works offline after one visit.
  *  - Google Fonts are cached too so typography renders offline.
  */
-const CACHE_NAME = "sues-shell-v3";
+const CACHE_NAME = "sues-shell-v4";
 
 self.addEventListener("install", () => {
   // Force waiting service workers out of the way on new installs.
