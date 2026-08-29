@@ -9,6 +9,7 @@ export default function LoginPage() {  const navigate = useNavigate();
   const [redirecting, setRedirecting] = useState(false);
   const [maintenance, setMaintenance] = useState<MaintenanceMode>({ enabled: false, message: MAINTENANCE_DEFAULT_MESSAGE });
   const [lockedOut, setLockedOut] = useState(false);
+  const [adminError, setAdminError] = useState("");
 
   // Live maintenance kill-switch.
   useEffect(() => {
@@ -58,6 +59,30 @@ export default function LoginPage() {  const navigate = useNavigate();
     }
   }
 
+  // Administrator sign-in from the maintenance lockout. Errors stay ON the
+  // lockout screen so a rejected email is never silently bounced to the normal
+  // login form.
+  async function handleAdminGoogleSignIn(email: string) {
+    setAdminError("");
+    setSubmitting(true);
+    try {
+      const { user, error, redirecting } = await authService.signInWithGoogle(email);
+      if (redirecting) {
+        setRedirecting(true);
+        return;
+      }
+      if (error || !user) {
+        setAdminError(error || "Authentication failed");
+        return;
+      }
+      navigate("/admin/dashboard", { replace: true });
+    } catch (err) {
+      setAdminError(err instanceof Error ? err.message : "Authentication failed");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   // While maintenance is ON and the full-screen lockout hasn't been passed,
   // render the branded CONTACT NOAH lockout (stripe pattern background and the
   // catch-the-dot game) with an email gate: only the configured Administrator
@@ -69,19 +94,24 @@ export default function LoginPage() {  const navigate = useNavigate();
         message={maintenance.message}
         submitting={submitting}
         redirecting={redirecting}
+        error={adminError}
+        onClearError={() => setAdminError("")}
         onAdminSignIn={async (email) => {
-          setError("");
-          // Only a properly formatted email is accepted, even here.
+          setAdminError("");
+          // Format check first.
           if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            return; // the lockout screen already surfaces the format error
-          }
-          // Only the configured Administrator email may proceed to Google.
-          const isAdmin = await isConfiguredMaintenanceAdmin(email);
-          if (!isAdmin) {
-            setLockedOut(true);
+            setAdminError("Please enter a valid email address (e.g. name@example.com).");
             return;
           }
-          await handleGoogleSignIn(email);
+          // Only a REAL configured Administrator email is accepted - not just any
+          // well-formatted address. If it's not on the configured allow-list, it
+          // is rejected here and never reaches Google.
+          const isAdmin = await isConfiguredMaintenanceAdmin(email);
+          if (!isAdmin) {
+            setAdminError("This email is not an authorized administrator email. CONTACT NOAH to be authorised.");
+            return;
+          }
+          await handleAdminGoogleSignIn(email);
         }}
       />
     );
@@ -178,11 +208,15 @@ function LockoutScreen({
   message,
   submitting,
   redirecting,
+  error,
+  onClearError,
   onAdminSignIn,
 }: {
   message: string;
   submitting: boolean;
   redirecting: boolean;
+  error: string;
+  onClearError: () => void;
   onAdminSignIn: (email: string) => void;
 }) {
   const [email, setEmail] = useState("");
@@ -236,7 +270,10 @@ function LockoutScreen({
             placeholder="Enter your administrator email"
             value={email}
             disabled={submitting || redirecting}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              onClearError();
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && emailValid && !submitting && !redirecting) {
                 attemptSignIn();
@@ -262,6 +299,11 @@ function LockoutScreen({
           >
             {submitting || redirecting ? "Signing in…" : "Sign in with Google"}
           </Button>
+          {error && (
+            <p className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-sm px-3 py-2">
+              {error}
+            </p>
+          )}
         </div>
       </div>
     </div>
