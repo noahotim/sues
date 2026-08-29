@@ -277,10 +277,11 @@ function SnakeGame() {
   });
   const dirRef = useRef<[number, number]>([1, 0]);
   const [, setTick] = useState(0);
-  const [best, setBest] = useState(0);
+  const [best, setBest] = useState(30);
   // Mirror of best used inside the game loop so the "highest score" target can
   // be read synchronously (the interval can't rely on async state updates).
-  const bestRef = useRef<number>(0);
+  // The highest score to reach is 30 by default.
+  const bestRef = useRef<number>(30);
 
   // Update the record and reflect it in both the state (for display) and the
   // ref (for the loop's win check).
@@ -426,10 +427,10 @@ function SnakeGame() {
   useEffect(() => {
     try {
       const stored = Number(localStorage.getItem("sues_snake_best") || "0");
-      if (stored > 0) {
-        bestRef.current = stored;
-        setBest(stored);
-      }
+      // Keep the win target at least 30 regardless of any previously saved score.
+      const target = Math.max(30, stored);
+      bestRef.current = target;
+      setBest(target);
     } catch { /* ignore */ }
   }, []);
 
