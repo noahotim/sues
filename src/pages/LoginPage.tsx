@@ -257,6 +257,7 @@ function SnakeGame() {
     food: [number, number];
     running: boolean;
     gameOver: boolean;
+    won: boolean;
     score: number;
   }
 
@@ -271,11 +272,23 @@ function SnakeGame() {
     food: [10, 7],
     running: false,
     gameOver: false,
+    won: false,
     score: 0,
   });
   const dirRef = useRef<[number, number]>([1, 0]);
   const [, setTick] = useState(0);
   const [best, setBest] = useState(0);
+  // Mirror of best used inside the game loop so the "highest score" target can
+  // be read synchronously (the interval can't rely on async state updates).
+  const bestRef = useRef<number>(0);
+
+  // Update the record and reflect it in both the state (for display) and the
+  // ref (for the loop's win check).
+  function updateBest(value: number) {
+    bestRef.current = value;
+    setBest(value);
+    try { localStorage.setItem("sues_snake_best", String(value)); } catch { /* ignore */ }
+  }
 
   // Speed levels -> tick interval in ms. Persisted so the user's preference
   // survives reloads. Changing speed mid-game restarts the loop immediately.
@@ -364,10 +377,11 @@ function SnakeGame() {
       const head = g.snake[0];
       const nextHead: [number, number] = [head[0] + dx, head[1] + dy];
 
-      // Wall collision -> game over.
+      // Wall collision -> game over (failure).
       if (nextHead[0] < 0 || nextHead[0] >= SIZE || nextHead[1] < 0 || nextHead[1] >= SIZE) {
         g.running = false;
         g.gameOver = true;
+        g.won = false;
         render();
         return;
       }
@@ -375,10 +389,11 @@ function SnakeGame() {
       const willEat = nextHead[0] === g.food[0] && nextHead[1] === g.food[1];
       const body = willEat ? g.snake : g.snake.slice(0, -1);
 
-      // Self collision -> game over.
+      // Self collision -> game over (failure).
       if (body.some((c) => c[0] === nextHead[0] && c[1] === nextHead[1])) {
         g.running = false;
         g.gameOver = true;
+        g.won = false;
         render();
         return;
       }
@@ -387,11 +402,18 @@ function SnakeGame() {
       g.snake = next;
       if (willEat) {
         g.score += 1;
-        setBest((b) => {
-          const nb = Math.max(b, g.score);
-          try { localStorage.setItem("sues_snake_best", String(nb)); } catch { /* ignore */ }
-          return nb;
-        });
+
+        // Reached the highest score -> congratulations, game over (win).
+        if (g.score > 0 && g.score >= bestRef.current) {
+          g.running = false;
+          g.gameOver = true;
+          g.won = true;
+          updateBest(g.score);
+          g.food = spawnFood(next);
+          render();
+          return;
+        }
+
         g.food = spawnFood(next);
       }
       render();
@@ -404,7 +426,10 @@ function SnakeGame() {
   useEffect(() => {
     try {
       const stored = Number(localStorage.getItem("sues_snake_best") || "0");
-      if (stored > 0) setBest(stored);
+      if (stored > 0) {
+        bestRef.current = stored;
+        setBest(stored);
+      }
     } catch { /* ignore */ }
   }, []);
 
@@ -423,11 +448,12 @@ function SnakeGame() {
     ]);
     g.score = 0;
     g.gameOver = false;
+    g.won = false;
     g.running = true;
     render();
   }
 
-  const { snake, food, running, gameOver, score } = game.current;
+  const { snake, food, running, gameOver, won, score } = game.current;
   const cellPx = 16;
   const boardPx = SIZE * cellPx;
 
@@ -515,10 +541,30 @@ function SnakeGame() {
         {/* Overlay when idle / game over */}
         {(!running || gameOver) && (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-900/40">
-            <div className="text-center px-3 py-2 bg-white rounded-sm shadow">
-              <p className="text-sm font-bold text-primary-900">
-                {gameOver ? "Game over!" : "Ready?"}
-              </p>
+            <div className="text-center px-4 py-3 bg-white rounded-sm shadow">
+              {gameOver ? (
+                won ? (
+                  <>
+                    <p className="text-sm font-bold text-emerald-700">
+                      Congratulations!
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      You reached the highest score — {score}!
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-bold text-red-700">
+                      You failed — Game over!
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      You hit {score}. Try again!
+                    </p>
+                  </>
+                )
+              ) : (
+                <p className="text-sm font-bold text-primary-900">Ready?</p>
+              )}
               <button
                 type="button"
                 onClick={start}
