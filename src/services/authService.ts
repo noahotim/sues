@@ -107,6 +107,26 @@ export async function isConfiguredMaintenanceAdmin(email: string | null | undefi
   return admins.includes(em);
 }
 
+/**
+ * The role stored on the register (eligible_emails/{email}). The register is
+ * the authoritative role source - roles are assigned there via User Management.
+ * A signed-in user may read their own entry, so this works for the current
+ * session without admin privileges. Returns null when unset/unreadable.
+ */
+export async function getRegisterRole(email: string | null | undefined): Promise<string | null> {
+  if (!email) return null;
+  const em = email.trim().toLowerCase();
+  try {
+    const snap = await getDoc(doc(db, "eligible_emails", em));
+    if (snap.exists() && typeof snap.data()?.role === "string") {
+      return snap.data()!.role as string;
+    }
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
 // Guards against double-redirects (a second click would overwrite the pending
 // state and break the return trip) and memoizes result processing so the
 // redirect is consumed exactly once no matter how many components ask.

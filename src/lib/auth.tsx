@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { authService, UserProfile, isAdminForMaintenance } from "../services";
+import { authService, UserProfile, isAdminForMaintenance, getRegisterRole } from "../services";
 import { ROLE_PERMISSIONS, ROLES } from "./constants";
 import type { User as FirebaseUser } from "firebase/auth";
 import { getAuth, signOut } from "firebase/auth";
@@ -46,7 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: userProfile } = await authService.getUserProfile(firebaseUser.uid);
       const idTokenResult = await firebaseUser.getIdTokenResult().catch(() => null);
       const claimRole = (idTokenResult?.claims?.role as string) || undefined;
-      const userRoleStr = userProfile?.roleId || claimRole || "VOTER";
+      // The register (eligible_emails) is the authoritative role source - it is
+      // where roles are assigned in User Management. Prefer it over the possibly
+      // stale profile/claim so role changes always take effect on the dashboard.
+      const registerRole = await getRegisterRole(firebaseUser.email);
+      const userRoleStr = registerRole || userProfile?.roleId || claimRole || "VOTER";
 
       const userRole = ROLES.find((r) => r.id === userRoleStr) ?? ROLES.find(r => r.id === "VOTER")!;
       setRole(userRole);
