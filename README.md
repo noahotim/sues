@@ -38,7 +38,20 @@ An online voting platform built for the **Soroti University Engineering Society 
 - **Multi-layer persistence** — `indexedDBLocalPersistence` + `browserLocalPersistence` + `browserSessionPersistence` to survive browser storage partitioning.
 - **Redirect state guard** — a sessionStorage flag prevents stale redirect results from causing dead-ends.
 - **Eligibility gate** — staff (register entry with a non-VOTER role) OR voters present on an actual roster may sign in. Plain VOTER register entries alone are not sufficient for login.
-- **Role from Firestore profile** — no Cloud Functions needed; roles are read from `users/{uid}.role` with an `exists()` guard for first-time profile creation.
+- **Role from the register** — no Cloud Functions needed; the authoritative role is read from the register (`eligible_emails/{email}.role`) with the profile (`users/{uid}.role`) and legacy custom claims as fallbacks, so role changes in User Management always show up on the dashboard.
+- **Administrator role** — `ROLE_ADMINISTRATOR` (owner). Full permissions and exempt from the maintenance lock. Assign it in User Management; it is also accepted by the maintenance gate allow-list.
+
+### Maintenance Mode (Kill-Switch)
+- **Realtime kill-switch** — a single `system_config/maintenance` document (`enabled`, `message`) is watched live. The moment it flips ON, every signed-in non-Administrator is force-signed-out (with an alert) and the login page shows a **full-screen CONTACT NOAH lockout** to everyone.
+- **No default email** — nothing is allowed through unless the admin assigns the `ROLE_ADMINISTRATOR` role or saves email(s) in `system_config/admin_emails` (Dashboard → Maintenance Lock card).
+- **Gated Administrator sign-in** — the lockout has an email field: the address must be **validly formatted** *and* **actually configured** as an admin before Google's account chooser is ever shown. Invalid or non-admin emails get a clear message and stay on the lockout.
+- **Snake game** — the lockout includes a self-contained classic Snake game (arrow keys / WASD + on-screen d-pad, **Slow/Normal/Fast speed control**). Reaching the **highest score (30)** ends the game with a congratulatory message; failing shows a failure message; both offer Play again.
+- **Recovery safety net** — `scripts/maintenance.mjs` toggles the lock via a service account out-of-band, so the owner can always reopen the system.
+
+### Offline (PWA)
+- **App-shell service worker** — a hand-written `public/sw.js` caches the shell and hashed assets (network-first HTML, cache-first immutable chunks, Google Fonts cached) so the login page and the lockout screen **work offline** after one visit.
+- **Installable** — `public/manifest.webmanifest` + theme/mobile meta tags.
+- **Cache-fresh deploys** — Firebase Hosting serves the SPA HTML, `sw.js` and manifest with `no-cache` (hashed `/assets/*` stay `immutable`), so new deploys and service-worker updates propagate immediately instead of lingering for an hour.
 
 ### UI & Design
 - **SUES branding** — logo on every page (login, sidebar, mobile header, admin headers, vote booth, results, PDF exports), favicon, and the browser tab.
@@ -59,32 +72,38 @@ An online voting platform built for the **Soroti University Engineering Society 
 
 | Platform          | URL                                                |
 | ----------------- | -------------------------------------------------- |
-| Firebase Hosting  | https://sues-vote-live.web.app (primary)           |
-| Vercel            | https://sues-tau.vercel.app (parity)               |
+| Firebase Hosting  | https://sues-vote-live.web.app (primary — only maintained target) |
 | Firebase project  | `sues-vote-live` (user-owned, `otim.no25@gmail.com`) |
+
+> Vercel (`sues-tau.vercel.app`) is **no longer deployed** — it may serve stale
+> content. Firebase Hosting is the only maintained production target.
 
 ### Deploy commands
 
 ```bash
-# Hide .env (contains emulator/dev config) before production builds
+# Hide .env (contains emulator/dev config for the sues-d7a7f project) so the
+# production build falls back to the hardcoded sues-vote-live defaults.
 Move-Item .env .env.dev-backup
 
 # Clear Vite cache and build
 Remove-Item -Recurse -Force node_modules/.vite
 npm run build
 
-# Deploy Firestore rules + hosting
+# Deploy Firestore rules + hosting (includes the no-cache SPA headers)
 $env:FIREBASE_SKIP_FRAMEWORK_SETUP="1"
 npx firebase deploy --only firestore:rules,hosting --project sues-vote-live
 
-# Deploy to Vercel
-npx vercel --prod --yes
-
-# Restore .env
+# Restore .env afterwards
 Move-Item .env.dev-backup .env
 ```
 
-> **Important:** The `.env` file contains emulator configuration and the old `sues-d7a7f` project keys. The production build falls back to hardcoded `sues-vote-live` defaults when env vars are absent. Always hide `.env` and clear the Vite cache before building for production.
+> **Important:** The `.env` file contains emulator configuration and the old
+> `sues-d7a7f` project keys. The production build falls back to hardcoded
+> `sues-vote-live` defaults when env vars are absent. Always hide `.env` and
+> clear the Vite cache before building for production — a build made with `.env`
+> present points the live app at the wrong project. `firebase.json` hosting
+> headers serve the SPA HTML/sw.js/manifest with `no-cache` and hashed
+> `/assets/*` with `immutable` so every deploy takes effect immediately.
 
 ## Getting Started
 
@@ -137,7 +156,12 @@ functions/
   test-string-times.mjs Regression test for Timestamp-based voting
 scripts/
   fb-backfill-times.cjs Production backfill: converts ISO strings to Timestamps
+  maintenance.mjs       Out-of-band maintenance lock/unlock/inspect (service account)
+public/
+  sw.js                 Offline app-shell service worker (PWA)
+  manifest.webmanifest  PWA web manifest
 firestore.rules     Comprehensive security rules for all collections
+index.html          App shell (links the manifest; registers the service worker)
 ```
 
 ## Security Rules
@@ -153,6 +177,7 @@ The Firestore security rules enforce all invariants server-side:
 | `vote_receipts`   | Own receipts            | Create-once (atomic duplicate lock)    |
 | `votes`           | Admins only             | Create-once (nonce-keyed, anonymous)   |
 | `eligible_emails` | Admins + own entry      | Election managers                      |
+| `system_config`   | Public (lockout gate)   | Chairperson / Administrator            |
 | `audit_logs`      | Chairperson only        | Create with action validation          |
 | `users`           | Own profile + admins    | Self (name) / Chair (roles)            |
 
@@ -166,12 +191,13 @@ Key rules:
 
 | Role              | Permissions                                                          |
 | ----------------- | -------------------------------------------------------------------- |
-| Chairperson       | Dashboard, Elections, Candidates, Roster, Results, Users, Audit, Publish, Vote |
+| Administrator     | Everything (owner) — full access, exempt from the maintenance lock   |
+| Chairperson       | Dashboard, Elections, Candidates, Roster, Results, Users, Audit, Publish, Vote, Maintenance |
 | Secretary         | Dashboard, Elections, Candidates, Roster, Results, Vote              |
 | Polling Assistant | Dashboard, Roster, Vote                                              |
 | Voter             | Vote, View Results                                                   |
 
-Roles are enforced in the UI (permission guard) and server-side via Firestore security rules. Roles are read from the Firestore profile document (`users/{uid}.role`), not from Cloud Function custom claims.
+Roles are enforced in the UI (permission guard) and server-side via Firestore security rules. Roles are read from the register (`eligible_emails/{email}.role`), falling back to the Firestore profile (`users/{uid}.role`) and legacy custom claims — not from Cloud Functions.
 
 ## Scripts
 
@@ -192,6 +218,7 @@ Roles are enforced in the UI (permission guard) and server-side via Firestore se
 | `node functions/verify-demo.mjs`                 | Verifies the full demo lifecycle (9 checks)      |
 | `node functions/demo-full-process.mjs`           | End-to-end demo: seed → vote → verify → results  |
 | `node scripts/fb-backfill-times.cjs`             | Backfill production elections: ISO → Timestamp   |
+| `node scripts/maintenance.mjs on/off/show sa.json` | Out-of-band maintenance lock/unlock/inspect (service account) |
 
 ## Signing in
 
@@ -199,10 +226,13 @@ Every account uses **Google sign-in**. After authenticating, the system checks w
 
 | Person                        | How they sign in                                                                                                   |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Administrator**             | Google sign-in with their registered email. Full access; exempt from the maintenance lock.                        |
 | **Chairperson**               | Google sign-in with their registered email. Full admin access.                                                     |
 | **Secretary**                 | Google sign-in with their registered email. Election-manager admin.                                                |
 | **Polling Assistant**         | Google sign-in with their registered email. Can manage the roster and vote.                                        |
 | **Voter (student)**           | Google sign-in with the exact email imported onto a roster via CSV. Voting + results access.                        |
+
+When **maintenance is ON**, everyone is locked out of the normal sign-in. Only an email that is **validly formatted** and **configured as an administrator** (`ROLE_ADMINISTRATOR` role or saved in `system_config/admin_emails`) may proceed from the lockout screen to Google sign-in.
 
 ### Importing voters from a local CSV file
 
