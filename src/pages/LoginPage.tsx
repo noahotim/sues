@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authService, MAINTENANCE_ERR_MARKER, MAINTENANCE_DEFAULT_MESSAGE, type MaintenanceMode } from "../services";
-import { Button, Spinner, Modal } from "../components/ui";
+import { Button, Spinner } from "../components/ui";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -9,16 +9,7 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [maintenance, setMaintenance] = useState<MaintenanceMode>({ enabled: false, message: MAINTENANCE_DEFAULT_MESSAGE });
-  const [showLockout, setShowLockout] = useState(false);
-  const [lockoutMessage, setLockoutMessage] = useState("");
-
-  // Live maintenance kill-switch. When maintenance flips ON, the login page
-  // immediately shows the lockout popup (with the game). Exempt admins can
-  // continue past it to sign in; non-exempt users stay blocked afterward.
-  useEffect(() => {
-    setShowLockout(maintenance.enabled);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [maintenance.enabled]);
+  const [dismissed, setDismissed] = useState(false);
 
   // Live maintenance kill-switch.
   useEffect(() => {
@@ -34,8 +25,7 @@ export default function LoginPage() {
         navigate("/admin/dashboard", { replace: true });
       } else if (res.error) {
         if (res.error.startsWith(MAINTENANCE_ERR_MARKER)) {
-          setLockoutMessage(res.error.replace(MAINTENANCE_ERR_MARKER, ""));
-          setShowLockout(true);
+          setError("Access denied. Only authorised administrators can sign in.");
         } else {
           setError(res.error);
         }
@@ -55,8 +45,7 @@ export default function LoginPage() {
       }
       if (error || !user) {
         if (error && error.startsWith(MAINTENANCE_ERR_MARKER)) {
-          setLockoutMessage(error.replace(MAINTENANCE_ERR_MARKER, ""));
-          setShowLockout(true);
+          setError("Access denied. Only authorised administrators can sign in.");
         } else {
           setError(error || "Authentication failed");
         }
@@ -70,14 +59,21 @@ export default function LoginPage() {
     }
   }
 
-  function closeLockout() {
-    setShowLockout(false);
-    setLockoutMessage("");
-  }
-
-  function continuePastLockout() {
-    setShowLockout(false);
-    setLockoutMessage("");
+  // While maintenance is ON and the full-screen lockout hasn't been passed,
+  // render the branded CONTACT NOAH lockout (original first version look with
+  // a stripe pattern background and the catch-the-dot game). Only an
+  // authorised/exempt email is allowed through; non-exempt emails are blocked
+  // after attempting sign-in.
+  if (maintenance.enabled && !dismissed) {
+    return (
+      <LockoutScreen
+        message={maintenance.message}
+        onAdminSignIn={() => {
+          setDismissed(true);
+          handleGoogleSignIn();
+        }}
+      />
+    );
   }
 
   return (
@@ -93,21 +89,6 @@ export default function LoginPage() {
           <h1 className="text-3xl font-extrabold text-primary-900 tracking-tight">Elections Portal</h1>
         </div>
 
-        {/* Maintenance banner (informational only) */}
-        {maintenance.enabled && (
-          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-sm text-center">
-            <p className="text-sm font-medium text-amber-900">
-              System Maintenance Active
-            </p>
-            <p className="text-xs text-amber-800 mt-1">
-              {maintenance.message.split("\n")[0]}
-            </p>
-            <p className="text-xs text-amber-700 mt-2">
-              Exempt administrators can sign in normally. Others will be blocked.
-            </p>
-          </div>
-        )}
-
         <div className="bg-white border-t-2 border-primary-900 p-8 flex flex-col gap-6 shadow-sm rounded-sm bg-slate-50">
           {error && (
             <div className="text-sm text-error-700 bg-error-50 border border-error-200 rounded-sm px-4 py-3">
@@ -122,7 +103,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <Button onClick={handleGoogleSignIn} disabled={submitting || redirecting || showLockout} className="w-full" size="lg">
+          <Button onClick={handleGoogleSignIn} disabled={submitting || redirecting} className="w-full" size="lg">
             {submitting || redirecting ? "Signing in..." : "Sign in with Google"}
           </Button>
 
@@ -171,32 +152,48 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
-
-      {/* Lockout modal: shows on page load when maintenance is ON, and again
-          after a non-exempt sign-in attempt. Exempt admins click "Continue to
-          sign in" to pass it. */}
-      <LockoutModal
-        isOpen={showLockout && maintenance.enabled}
-        onClose={closeLockout}
-        onContinue={continuePastLockout}
-        message={lockoutMessage || maintenance.message}
-      />
     </div>
   );
 }
 
 /**
- * Lockout modal shown when non-exempt user attempts sign-in during maintenance.
+ * Full-screen lockout shown when maintenance is ON. Recreates the original
+ * first-version look: stripe pattern background, lock icon, CONTACT NOAH,
+ * the catch-the-dot game, and a subtle "Administrator?" Google sign-in button.
+ * Only the exempt/admin email is allowed through; non-exempt emails are blocked
+ * after they attempt sign-in.
  */
-function LockoutModal({ isOpen, onClose, onContinue, message }: { isOpen: boolean; onClose: () => void; onContinue: () => void; message: string }) {
+function LockoutScreen({ message, onAdminSignIn }: { message: string; onAdminSignIn: () => void }) {
   const [score, setScore] = useState(0);
+  const [best, setBest] = useState(0);
   const [pos, setPos] = useState({ top: 30, left: 30 });
   const [hit, setHit] = useState(false);
-  const [best, setBest] = useState(0);
+
+  function handleHit() {
+    const box = 300;
+    const dot = 40;
+    setPos({
+      top: Math.floor(Math.random() * (box - dot)),
+      left: Math.floor(Math.random() * (box - dot)),
+    });
+    setScore((s) => {
+      const next = s + 1;
+      setBest((b) => Math.max(b, next));
+      return next;
+    });
+    setHit(true);
+    window.setTimeout(() => setHit(false), 120);
+  }
 
   return (
-    <Modal open={isOpen} onClose={onClose} title="Access Denied — System Locked" maxWidth="520px">
-      <div className="text-center">
+    <div
+      className="min-h-screen flex items-center justify-center p-6"
+      style={{
+        background:
+          "repeating-linear-gradient(45deg, #111827 0 28px, #1f2937 28px 56px)",
+      }}
+    >
+      <div className="w-full max-w-md bg-white rounded-lg shadow-2xl p-8 text-center">
         <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-red-600 flex items-center justify-center">
           <svg viewBox="0 0 24 24" className="w-9 h-9 text-white fill-current" aria-hidden>
             <path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4Zm0 2.18 7 3.11v5.7c0 4.5-2.92 8.67-7 10-4.08-1.33-7-5.5-7-10v-5.7l7-3.11ZM11 7v6h2V7h-2Zm0 8v2h2v-2h-2Z" />
@@ -208,7 +205,8 @@ function LockoutModal({ isOpen, onClose, onContinue, message }: { isOpen: boolea
         <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line mb-4">
           {message.split("\n")[0]}
         </p>
-        <div className="mb-4 border-t border-slate-200 pt-4">
+
+        <div className="mt-2 mb-4 border-t border-slate-200 pt-4">
           <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
             Pass the time — catch the dot
           </p>
@@ -219,20 +217,7 @@ function LockoutModal({ isOpen, onClose, onContinue, message }: { isOpen: boolea
             <button
               type="button"
               aria-label="Catch the dot"
-              onClick={() => {
-                const box = 300;
-                const dot = 40;
-                const top = Math.floor(Math.random() * (box - dot));
-                const left = Math.floor(Math.random() * (box - dot));
-                setPos({ top, left });
-                setScore((s) => {
-                  const next = s + 1;
-                  setBest((b) => Math.max(b, next));
-                  return next;
-                });
-                setHit(true);
-                window.setTimeout(() => setHit(false), 120);
-              }}
+              onClick={handleHit}
               className="absolute rounded-full cursor-pointer transition-transform"
               style={{
                 width: 40,
@@ -251,18 +236,13 @@ function LockoutModal({ isOpen, onClose, onContinue, message }: { isOpen: boolea
             Best: <span className="font-bold text-primary-900">{best}</span>
           </p>
         </div>
-        <p className="text-xs text-slate-400">
-          Only exempt administrators can access the system during maintenance.
-        </p>
+
         <div className="mt-6">
-          <Button onClick={onContinue} className="w-full" size="lg">
-            Continue to sign in
+          <Button onClick={onAdminSignIn} className="w-full" size="lg">
+            Administrator? Sign in with Google
           </Button>
-          <p className="mt-2 text-xs text-slate-400">
-            Administrators only — if your account is exempt you can sign in now.
-          </p>
         </div>
       </div>
-    </Modal>
+    </div>
   );
 }
