@@ -282,7 +282,9 @@ Voter clicks "Confirm Selection"
   │  The nonce is a 40-char hex string (20 random bytes). │
   │  It's stored in the receipt but NOT linked to the     │
   │  voter's identity. The vote document contains only:   │
-  │    - electionId, positionId, candidateId, createdAt   │
+  │    - electionId, positionId, candidateId              │
+  │    (NO createdAt: a timestamp on the ballot could      │
+  │     let an admin correlate it with the named receipt) │
   │                                                       │
   │  Rules verify:                                        │
   │    - A valid receipt exists for this election+position │
@@ -295,9 +297,9 @@ Voter clicks "Confirm Selection"
   │  Create audit_logs/{auto-id}                         │
   │    action: "CAST_VOTE"                                │
   │    entityType: "vote"                                 │
-  │    entityId: candidateId                              │
+  │    entityId: positionId  (NOT the candidate)          │
   │    details: { electionId, positionId }                │
-  │    (NO actorEmail — ballot secrecy preserved)         │
+  │    (NO actorEmail, NO candidate — ballot secrecy)     │
   └──────────────────────────────────────────────────────┘
         │
         ▼
@@ -416,7 +418,7 @@ Every mutation in the system calls `auditService.log()` as a **best-effort, non-
 {
   "action": "CAST_VOTE",
   "entityType": "vote",
-  "entityId": "candidate_abc123",
+  "entityId": "position_def",   // the position — the candidate is never recorded
   "details": {
     "electionId": "election_xyz",
     "positionId": "position_def"
@@ -428,7 +430,7 @@ Every mutation in the system calls `auditService.log()` as a **best-effort, non-
 
 ### Real-Time Display
 
-The Audit Logs page (`/admin/audit`) subscribes via `onSnapshot` — entries appear the instant they're written. Only the Chairperson can read audit logs (enforced by security rules).
+The Audit Logs page (`/admin/audit`) subscribes via `onSnapshot` — entries appear the instant they're written. Only the Administrator or Chairperson can read audit logs (enforced by security rules).
 
 ---
 
@@ -557,9 +559,8 @@ firestore/
 {
   "electionId": "election_xyz",
   "positionId": "position_def",
-  "candidateId": "candidate_abc",
-  "createdAt": "Timestamp"
-  // NO voter identity — ballot is anonymous
+  "candidateId": "candidate_abc"
+  // NO voter identity and NO timestamp — ballot is anonymous
 }
 ```
 
@@ -568,10 +569,10 @@ firestore/
 {
   "action": "CAST_VOTE",
   "entityType": "vote",
-  "entityId": "candidate_abc",
+  "entityId": "position_def",   // the position, never the candidate
   "details": { "electionId": "...", "positionId": "..." },
   "createdAt": "Timestamp"
-  // actorEmail omitted for CAST_VOTE
+  // actorEmail omitted for CAST_VOTE; choice never recorded
 }
 ```
 
@@ -586,9 +587,10 @@ firestore/
 | `isSignedIn()` | Checks `request.auth != null` |
 | `userEmail()` | Returns the authenticated user's email |
 | `myRole()` | Reads `users/{uid}.role` with `exists()` guard for new accounts |
-| `isAdminRole()` | Chairperson, Secretary, or Assistant |
-| `isChairperson()` | Chairperson only |
-| `isElectionManager()` | Chairperson or Secretary |
+| `isAdminRole()` | Administrator, Chairperson, Secretary, or Assistant |
+| `isChairperson()` | Administrator or Chairperson |
+| `isElectionManager()` | Administrator, Chairperson, or Secretary |
+| `validRole(role)` | Role must be one of the 5 valid roles: Administrator, Chairperson, Secretary, Assistant, Voter |
 | `electionStatus(electionId)` | Reads the election's `status` field |
 | `electionOpen(electionId)` | Checks status=active AND time window |
 | `isRegisterMember()` | Checks `eligible_emails/{email}` exists |
@@ -599,23 +601,23 @@ firestore/
 
 | Collection | Read | Write |
 |-----------|------|-------|
-| `users` | Own profile + admins | Self (name only) / Chair (roles) |
+| `users` | Own profile + election managers | Self (name only) / Admin + Chair (roles) |
 | `elections` | Any signed-in user | Election managers |
 | `positions` | Admins + active/closed/published elections | Election managers |
 | `candidates` | Admins + active/closed/published elections | Election managers |
 | `voter_roster` | Any signed-in user | Managers (full) / voters (own turnout flags, additive-only) |
-| `eligible_emails` | Own entry + admins | Election managers |
+| `eligible_emails` | Own entry + election managers | Election managers |
 | `vote_receipts` | Own receipts | Create-once (atomic lock) |
-| `votes` | Any signed-in user | Create-once (nonce-keyed) |
-| `audit_logs` | Chairperson only | Create with action validation |
+| `votes` | Any signed-in user | Create-once (nonce-keyed, no timestamp) |
+| `audit_logs` | Admin + Chairperson only | Create with action validation |
 
 ### Key Invariants Enforced by Rules
 
 1. **Double-vote prevention**: `vote_receipts` document ID is deterministic → second create attempt collides atomically
-2. **Ballot secrecy**: `votes` documents contain no voter identity; `CAST_VOTE` audit logs have no `actorEmail`
+2. **Ballot secrecy**: `votes` documents contain no voter identity and no timestamp; `CAST_VOTE` audit logs have no `actorEmail` and record the position, never the candidate
 3. **Time enforcement**: `electionOpen()` compares `request.time` against Firestore Timestamps
 4. **Eligibility**: `isOnRosterNow()` checks both roster AND register
-5. **Role integrity**: Profile creation must mirror the register entry's role
+5. **Role integrity**: Profile creation must mirror the register entry's role, restricted to the 5 valid roles via `validRole()`
 6. **Turnout flags**: Voters can only flip their own `hasVoted`/`votedPositions`, and only additively (never remove)
 
 ---
@@ -624,23 +626,25 @@ firestore/
 
 ### Role Matrix
 
-| Permission | Chairperson | Secretary | Assistant | Voter |
-|-----------|:-----------:|:---------:|:---------:|:-----:|
-| VIEW_DASHBOARD | ✓ | ✓ | ✓ | — |
-| MANAGE_ELECTIONS | ✓ | ✓ | — | — |
-| MANAGE_CANDIDATES | ✓ | ✓ | — | — |
-| MANAGE_ROSTER | ✓ | ✓ | ✓ | — |
-| VIEW_RESULTS | ✓ | ✓ | — | ✓ |
-| MANAGE_USERS | ✓ | — | — | — |
-| VIEW_AUDIT_LOGS | ✓ | — | — | — |
-| VOTE | ✓ | ✓ | ✓ | ✓ |
-| PUBLISH_RESULTS | ✓ | — | — | — |
+| Permission | Administrator | Chairperson | Secretary | Assistant | Voter |
+|-----------|:-------------:|:-----------:|:---------:|:---------:|:-----:|
+| VIEW_DASHBOARD | ✓ | ✓ | ✓ | ✓ | — |
+| MANAGE_ELECTIONS | ✓ | ✓ | ✓ | — | — |
+| MANAGE_CANDIDATES | ✓ | ✓ | ✓ | — | — |
+| MANAGE_ROSTER | ✓ | ✓ | ✓ | ✓ | — |
+| VIEW_RESULTS | ✓ | ✓ | ✓ | — | ✓ |
+| MANAGE_USERS | ✓ | ✓ | — | — | — |
+| VIEW_AUDIT_LOGS | ✓ | ✓ | — | — | — |
+| VOTE | ✓ | ✓ | ✓ | ✓ | ✓ |
+| PUBLISH_RESULTS | ✓ | ✓ | — | — | — |
+
+The **Administrator** is the system owner with full access and is **exempt from the maintenance lock** (`system_config/maintenance`). During maintenance, only the Administrator may sign in.
 
 ### How Roles Are Assigned
 
-1. **Seeded staff**: Chairperson/Secretary emails are pre-seeded in `eligible_emails` with their admin role before any sign-in
+1. **Seeded staff**: Administrator/Chairperson/Secretary emails are pre-seeded in `eligible_emails` with their admin role before any sign-in
 2. **First sign-in**: `finalizeSignIn()` reads the register entry's role and writes it to `users/{uid}.role`
-3. **Runtime changes**: Only the Chairperson can update roles via the User Management page
+3. **Runtime changes**: Only the Administrator or Chairperson can update roles via the User Management page
 
 ### How Roles Are Enforced
 
