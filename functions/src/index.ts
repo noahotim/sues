@@ -6,7 +6,10 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 admin.initializeApp();
 const db = admin.firestore();
 
-// 1. Trigger: Auto-create user document & assign default role on sign up
+// 1. Trigger: Auto-create user document on sign up.
+// NOTE: no role is ever granted here. Roles come from the register
+// (eligible_emails), managed in User Management — there is no "first user
+// becomes Chairperson" race, and a stranger who signs up gains nothing.
 export const onUserCreated = functions.auth.user().onCreate(async (user) => {
   try {
     const usersRef = db.collection("users");
@@ -15,26 +18,15 @@ export const onUserCreated = functions.auth.user().onCreate(async (user) => {
     const existing = await usersRef.doc(user.uid).get();
     if (existing.exists) return;
 
-    // Check if this is the first user
-    const usersSnapshot = await usersRef.limit(1).get();
-    const isFirstUser = usersSnapshot.empty;
-    
-    let role = "VOTER";
-    if (isFirstUser) {
-      role = "ROLE_CHAIRPERSON";
-    }
-
-    // Assign custom claim
-    await admin.auth().setCustomUserClaims(user.uid, { role });
-
-    // Create user document
+    // Create the profile with NO privileges. Any role shown to the UI comes
+    // from the register (eligible_emails) or an explicit admin assignment.
     await usersRef.doc(user.uid).set({
       email: user.email || "",
       fullName: user.displayName || "Unknown User",
+      role: "VOTER",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-
   } catch (error) {
     console.error("Error setting up new user:", error);
   }
@@ -45,6 +37,11 @@ export const castVote = onCall(async (request) => {
   const authData = request.auth;
   if (!authData) {
     throw new HttpsError("unauthenticated", "User must be authenticated to vote.");
+  }
+  // Only verified email providers may vote. Without this, a password/etc.
+  // provider could register an unverified account under a voter's address.
+  if (authData.token.email_verified !== true) {
+    throw new HttpsError("permission-denied", "Email must be verified to vote.");
   }
 
   const { electionId, positionId, candidateId } = request.data;
@@ -113,13 +110,15 @@ export const castVote = onCall(async (request) => {
       throw new HttpsError("already-exists", "You have already voted for this position.");
     }
 
-    // Insert vote (no voter_id to maintain anonymity)
+    // Insert vote (no voter_id to maintain anonymity). Deliberately no
+    // timestamp: a precise timestamp on the vote could be correlated with the
+    // named receipt (written in the same transaction at the same commit time)
+    // to reconstruct the ballot.
     const voteRef = db.collection("votes").doc();
     transaction.set(voteRef, {
       electionId,
       positionId,
       candidateId,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
     // Insert receipt
@@ -136,13 +135,14 @@ export const castVote = onCall(async (request) => {
       votedPositions: admin.firestore.FieldValue.arrayUnion(positionId),
     });
 
-    // Audit log - deliberately WITHOUT the voter's identity so ballot secrecy
-    // is preserved (an admin cannot link a vote to its voter).
+    // Audit log - deliberately WITHOUT the voter's identity and WITHOUT the
+    // candidate chosen, so ballot secrecy holds: an admin cannot link a vote
+    // to its voter or learn which candidate a voter picked.
     const auditRef = db.collection("audit_logs").doc();
     transaction.set(auditRef, {
       action: "CAST_VOTE",
       entityType: "vote",
-      entityId: candidateId,
+      entityId: positionId,
       details: { electionId, positionId },
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -152,6 +152,7 @@ export const castVote = onCall(async (request) => {
 });
 
 // 3. Callable: Set user role (Admin only)
+const VALID_ROLES = ["ROLE_ADMINISTRATOR", "ROLE_CHAIRPERSON", "ROLE_SECRETARY", "ROLE_ASSISTANT", "VOTER"];
 export const setUserRole = onCall(async (request) => {
   const authData = request.auth;
   if (!authData || authData.token.role !== "ROLE_CHAIRPERSON") {
@@ -161,6 +162,9 @@ export const setUserRole = onCall(async (request) => {
   const { targetUid, targetRole } = request.data;
   if (!targetUid || !targetRole) {
     throw new HttpsError("invalid-argument", "Missing targetUid or targetRole.");
+  }
+  if (!VALID_ROLES.includes(targetRole)) {
+    throw new HttpsError("invalid-argument", `Unknown role: ${targetRole}`);
   }
 
   // Assign the new role

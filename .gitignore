@@ -1,7 +1,9 @@
 node_modules/
 .env
+.env.*
 dev.log
 dev.err.log
+.idea/
 
 # Firebase Emulator Suite
 firebase-debug.log
@@ -10,6 +12,8 @@ ui-debug.log
 emu-run.log
 emu-run.err.log
 e2e-emulator.log
+*.hardened.bak
+*.bak
 
 dist/
 .vercel/

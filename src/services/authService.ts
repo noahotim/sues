@@ -45,6 +45,16 @@ export const MAINTENANCE_ERR_MARKER = "__SUES_LOCKOUT__";
 // register / User Management) is exempt from the maintenance kill-switch.
 export const ROLE_ADMINISTRATOR = "ROLE_ADMINISTRATOR";
 
+// The only roles that may be assigned anywhere in the system (matches
+// src/lib/constants.ts ROLES and the Firestore rules validRole()).
+export const VALID_ROLES = new Set<string>([
+  "ROLE_ADMINISTRATOR",
+  "ROLE_CHAIRPERSON",
+  "ROLE_SECRETARY",
+  "ROLE_ASSISTANT",
+  "VOTER",
+]);
+
 // Doc under system_config holding the Administrator email(s) allowed to sign in
 // while maintenance is ON. Publicly readable (pre-sign-in so the login page can
 // gate who reaches the Google account chooser).
@@ -304,6 +314,14 @@ export const authService = {
         return { ok: false, error: "The sign-in provider did not return an email address." };
       }
 
+      // Only accept verified email addresses. Google accounts are verified by
+      // default, but if any other provider is ever enabled the security rules
+      // of eligibility (register/roster) assume the email is genuinely owned.
+      if (!fbUser.emailVerified) {
+        await signOut(auth);
+        return { ok: false, error: "This email address is not verified. Please verify it first." };
+      }
+
       // Maintenance kill-switch: lock out everyone EXCEPT the Administrator
       // role (assigned via User Management) or the hard-coded owner safety net.
       // Log the blocked attempt while the user is still signed in (audit rules
@@ -450,6 +468,7 @@ export const authService = {
 
   updateUserRole: async (targetUid: string, targetRole: string) => {
     try {
+      if (!VALID_ROLES.has(targetRole)) return { error: "Role must be one of: Administrator, Chairperson, Secretary, Polling Assistant, Voter." };
       // Preferred path: Cloud Function (when deployed). Fallback: direct doc
       // update, which security rules permit for the Chairperson.
       try {
@@ -637,6 +656,7 @@ export const authService = {
       const em = email.trim().toLowerCase();
       if (!em.includes("@")) return { data: null, error: "A valid email address is required." };
       if (!fullName.trim()) return { data: null, error: "A name is required." };
+      if (!VALID_ROLES.has(role)) return { data: null, error: "Role must be one of: Administrator, Chairperson, Secretary, Polling Assistant, Voter." };
       const ref = doc(db, "eligible_emails", em);
       const existing = await getDoc(ref);
       if (existing.exists()) {
@@ -663,6 +683,7 @@ export const authService = {
   updateRegisterRole: async (email: string, role: string) => {
     try {
       const em = email.trim().toLowerCase();
+      if (!VALID_ROLES.has(role)) return { error: "Role must be one of: Administrator, Chairperson, Secretary, Polling Assistant, Voter." };
       await updateDoc(doc(db, "eligible_emails", em), {
         role,
         updatedAt: serverTimestamp(),

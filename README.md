@@ -72,17 +72,17 @@ An online voting platform built for the **Soroti University Engineering Society 
 
 | Platform          | URL                                                |
 | ----------------- | -------------------------------------------------- |
-| Firebase Hosting  | https://sues-vote-live.web.app (primary — only maintained target) |
-| Firebase project  | `sues-vote-live` (user-owned, `otim.no25@gmail.com`) |
+| Firebase Hosting  | https://suesvotingsystem.web.app (primary — only maintained target) |
+| Firebase project  | `suesvotingsystem` (user-owned, `otim.no25@gmail.com`) |
 
-> Vercel (`sues-tau.vercel.app`) is **no longer deployed** — it may serve stale
-> content. Firebase Hosting is the only maintained production target.
+> The previous deployment target `sues-vote-live.web.app` was superseded. All
+> production content and live data now live in the `suesvotingsystem` project.
 
 ### Deploy commands
 
 ```bash
-# Hide .env (contains emulator/dev config for the sues-d7a7f project) so the
-# production build falls back to the hardcoded sues-vote-live defaults.
+# Hide .env (contains emulator/dev config for the old projects) so the
+# production build falls back to the hardcoded suesvotingsystem defaults.
 Move-Item .env .env.dev-backup
 
 # Clear Vite cache and build
@@ -91,15 +91,15 @@ npm run build
 
 # Deploy Firestore rules + hosting (includes the no-cache SPA headers)
 $env:FIREBASE_SKIP_FRAMEWORK_SETUP="1"
-npx firebase deploy --only firestore:rules,hosting --project sues-vote-live
+npx firebase deploy --only firestore:rules,hosting --project suesvotingsystem
 
 # Restore .env afterwards
 Move-Item .env.dev-backup .env
 ```
 
-> **Important:** The `.env` file contains emulator configuration and the old
-> `sues-d7a7f` project keys. The production build falls back to hardcoded
-> `sues-vote-live` defaults when env vars are absent. Always hide `.env` and
+> **Important:** The `.env` file contains emulator configuration and old
+> project keys. The production build falls back to the hardcoded
+> `suesvotingsystem` defaults when env vars are absent. Always hide `.env` and
 > clear the Vite cache before building for production — a build made with `.env`
 > present points the live app at the wrong project. `firebase.json` hosting
 > headers serve the SPA HTML/sw.js/manifest with `no-cache` and hashed
@@ -110,7 +110,7 @@ Move-Item .env.dev-backup .env
 ### Prerequisites
 
 - Node.js 24+ and npm
-- A Firebase project (or access to the existing `sues-vote-live` project)
+- A Firebase project (or access to the existing `suesvotingsystem` project)
 
 ### Running locally
 

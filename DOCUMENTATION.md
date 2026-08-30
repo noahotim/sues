@@ -44,8 +44,7 @@ The SUES Election Management System is a **serverless, client-side-driven** voti
 
 | Platform | URL |
 |----------|-----|
-| Firebase Hosting (primary) | https://sues-vote-live.web.app |
-| Vercel (parity) | https://sues-tau.vercel.app |
+| Firebase Hosting (primary) | https://suesvotingsystem.web.app |
 
 ---
 
@@ -729,25 +728,19 @@ npm run build
 
 # 4. Deploy rules + hosting
 $env:FIREBASE_SKIP_FRAMEWORK_SETUP = "1"
-npx firebase deploy --only firestore:rules,hosting --project sues-vote-live
+npx firebase deploy --only firestore:rules,hosting --project suesvotingsystem
 
 # 5. Restore .env
 Move-Item .env.dev-backup .env
-```
-
-### Vercel
-
-```bash
-npx vercel --prod --yes
 ```
 
 ### Why .env Must Be Hidden
 
 The `.env` file contains:
 - `VITE_USE_EMULATORS=true` — would try to connect to local emulators in production
-- `sues-d7a7f` Firebase config — wrong project
+- old project Firebase config — wrong project
 
-The production build uses hardcoded `sues-vote-live` fallback defaults when env vars are absent.
+The production build uses the hardcoded `suesvotingsystem` fallback defaults when env vars are absent.
 
 ### GitHub Repos
 
@@ -806,7 +799,7 @@ This single command:
 
 **Cause**: Firestore security rules restrict `votes` and `voter_roster` reads to admins only.
 
-**Fix**: Ensure `votes` read rule is `allow read: if isSignedIn()` and `voter_roster` read rule is `allow read: if isSignedIn()`. Deploy rules: `npx firebase deploy --only firestore:rules --project sues-vote-live`.
+**Fix**: Ensure `votes` read rule is `allow read: if isSignedIn()` and `voter_roster` read rule is `allow read: if isSignedIn()`. Deploy rules: `npx firebase deploy --only firestore:rules --project suesvotingsystem`.
 
 ### Login bounces back to login page
 

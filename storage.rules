@@ -11,13 +11,13 @@ service firebase.storage {
     }
     
     function isElectionManager() {
-      return hasRole('ROLE_CHAIRPERSON') || hasRole('ROLE_SECRETARY');
+      return hasRole('ROLE_ADMINISTRATOR') || hasRole('ROLE_CHAIRPERSON') || hasRole('ROLE_SECRETARY');
     }
 
-    match /{allPaths=**} {
-      // Anyone authenticated can view images
+    // Candidate photos only. Reads are authenticated; only election managers
+    // (Administrator/Chair/Secretary) may upload/delete images.
+    match /candidate-photos/{fileName} {
       allow read: if isAuthenticated();
-      // Only election managers can upload/delete candidate photos
       allow write: if isElectionManager()
                    // Ensure it's an image and reasonable size (e.g. < 5MB)
                    && (request.resource == null || (request.resource.size < 5 * 1024 * 1024 && request.resource.contentType.matches('image/.*')));

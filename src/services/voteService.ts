@@ -158,21 +158,24 @@ export const voteService = {
           break;
         }
 
-        // 2. Record the anonymous ballot.
+        // 2. Record the anonymous ballot. Deliberately NO timestamp: storing one
+        // could let an admin correlate an anonymous vote with its named receipt
+        // (which is written near-identically), reconstructing the ballot.
         try {
           await setDoc(doc(db, "votes", nonce), {
             electionId,
             positionId,
             candidateId,
-            createdAt: serverTimestamp(),
           });
         } catch {
           failed = "Ballot accepted but recording failed. Contact the election administrator.";
           break;
         }
 
-        // 3. Anonymous audit trail (never identifies the voter).
-        auditService.log("CAST_VOTE", "vote", candidateId, { electionId, positionId });
+        // 3. Anonymous audit trail (never identifies the voter, never records the
+        // choice). entityId is the POSITION (not the candidate) and details carry
+        // only election/position, so nothing links a voter to who they chose.
+        auditService.log("CAST_VOTE", "vote", positionId, { electionId, positionId });
         recorded++;
         recordedPositions.push(positionId);
       }

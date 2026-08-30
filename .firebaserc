@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "sues-d7a7f"
+    "default": "suesvotingsystem",
+    "suesvotingsystem": "suesvotingsystem",
+    "sues-vote-live": "sues-vote-live"
   }
 }

@@ -27,6 +27,11 @@ service cloud.firestore {
     function isElectionManager() {
       return myRole() == 'ROLE_ADMINISTRATOR' || myRole() == 'ROLE_CHAIRPERSON' || myRole() == 'ROLE_SECRETARY';
     }
+    // Only the four known roles may ever be assigned. ROLE_ASSISTANT exists to
+    // see dashboard + manage roster + vote, nothing more.
+    function validRole(role) {
+      return role in ['ROLE_ADMINISTRATOR', 'ROLE_CHAIRPERSON', 'ROLE_SECRETARY', 'ROLE_ASSISTANT', 'VOTER'];
+    }
     function electionStatus(electionId) {
       return get(/databases/$(database)/documents/elections/$(electionId)).data.status;
     }
@@ -60,11 +65,12 @@ service cloud.firestore {
 
     // ---------- Users / profiles ----------
     match /users/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || isAdminRole());
+      allow read: if isSignedIn() && (request.auth.uid == userId || isElectionManager());
       // First-time profile creation: role must mirror the signed-up user's
       // register entry (chairperson/staff seeded ahead of time), else VOTER.
       allow create: if isSignedIn() && request.auth.uid == userId
         && request.resource.data.email == userEmail()
+        && validRole(request.resource.data.role)
         && request.resource.data.role ==
             (exists(/databases/$(database)/documents/eligible_emails/$(userEmail()))
               ? get(/databases/$(database)/documents/eligible_emails/$(userEmail())).data.get('role', 'VOTER')
@@ -74,14 +80,15 @@ service cloud.firestore {
         (request.auth.uid == userId
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName']))
         ||
-        // chairperson/administrator assigns roles
+        // chairperson/administrator assigns roles (validated to known roles only)
         (myRole() == 'ROLE_ADMINISTRATOR' || myRole() == 'ROLE_CHAIRPERSON'
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'updatedAt']))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'updatedAt'])
+          && validRole(request.resource.data.role))
       );
       allow delete: if false;
 
       match /receipts/{receiptId} {
-        allow read: if isSignedIn() && (request.auth.uid == userId || isAdminRole());
+        allow read: if isSignedIn() && (request.auth.uid == userId || isElectionManager());
         allow write: if false; // legacy; voting no longer writes here
       }
     }
@@ -158,7 +165,7 @@ service cloud.firestore {
     match /votes/{voteId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn()
-        && request.resource.data.keys().hasOnly(['electionId', 'positionId', 'candidateId', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['electionId', 'positionId', 'candidateId'])
         && voteId.size() >= 20
         && electionOpen(request.resource.data.electionId)
         && exists(/databases/$(database)/documents/vote_receipts/$(receiptId(
@@ -203,8 +210,9 @@ service cloud.firestore {
     // Write: election managers maintain the register (e.g. via CSV import),
     // which grants eligibility in EVERY active election.
     match /eligible_emails/{email} {
-      allow read: if isSignedIn() && (isAdminRole() || request.auth.token.email == email);
-      allow write: if isElectionManager();
+      allow read: if isSignedIn() && (isElectionManager() || request.auth.token.email == email);
+      allow write: if isElectionManager()
+        && (!('role' in request.resource.data) || validRole(request.resource.data.role));
     }
   }
 }

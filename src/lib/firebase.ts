@@ -13,12 +13,12 @@ import { getAnalytics } from "firebase/analytics";
 // web-app values used as fallbacks so fresh deployments work out of the box.
 const env = import.meta.env;
 const firebaseConfig = {
-  apiKey: env.VITE_FIREBASE_API_KEY ?? "AIzaSyDNAj9wQZOEzPjbTLFdFg53WkrddoxB-Qk",
-  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN ?? "sues-vote-live.firebaseapp.com",
-  projectId: env.VITE_FIREBASE_PROJECT_ID ?? "sues-vote-live",
-  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET ?? "sues-vote-live.firebasestorage.app",
-  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? "729771304998",
-  appId: env.VITE_FIREBASE_APP_ID ?? "1:729771304998:web:8a187a6603ff879b3d1ee7",
+  apiKey: env.VITE_FIREBASE_API_KEY ?? "AIzaSyBnm-saVnngv21h5zFkKTNG8NBE4XfvHJc",
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN ?? "suesvotingsystem.firebaseapp.com",
+  projectId: env.VITE_FIREBASE_PROJECT_ID ?? "suesvotingsystem",
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET ?? "suesvotingsystem.firebasestorage.app",
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? "913364593346",
+  appId: env.VITE_FIREBASE_APP_ID ?? "1:913364593346:web:7f77ba8a92a806e118e95b",
   measurementId: env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
