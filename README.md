@@ -243,14 +243,15 @@ When **maintenance is ON**, everyone is locked out of the normal sign-in. Only a
 
 ## Contributing
 
-Contributions are welcome. Please follow the standard fork-and-pull-request workflow:
+The maintained repository is the fork **`noahotim/sues`** (development no longer
+pushes PRs to upstream `AbelEaX/sues`). Please follow the standard
+fork-and-pull-request workflow against it:
 
-1. **Fork** the repository on GitHub.
-2. **Clone** your fork and add the upstream as a remote:
+1. **Fork** `noahotim/sues` on GitHub.
+2. **Clone** your fork and keep it as `origin`:
 
    ```bash
    git clone https://github.com/YOUR-USERNAME/sues.git
-   git remote add upstream https://github.com/AbelEaX/sues.git
    ```
 
 3. Create a **feature branch** for your change (never commit directly to `main`):
@@ -267,7 +268,7 @@ Contributions are welcome. Please follow the standard fork-and-pull-request work
    git push origin fix/my-change
    ```
 
-5. Open a **Pull Request** against `AbelEaX/sues` with a clear description of what and why.
+5. Open a **Pull Request** against `noahotim/sues` with a clear description of what and why.
 
 ### Conventions
 

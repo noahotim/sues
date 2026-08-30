@@ -751,10 +751,12 @@ The production build uses hardcoded `sues-vote-live` fallback defaults when env 
 
 ### GitHub Repos
 
+> Development now happens **only** on the fork. No further PRs are pushed to
+> `AbelEaX/sues` (upstream); the `origin` remote pointing there has been removed.
+
 | Repository | Branch | Purpose |
 |-----------|--------|---------|
-| `AbelEaX/sues` | `fix/vote-roster-eligibility` | Upstream PR #10 |
-| `noahotim/sues` | `fix/vote-roster-eligibility` | Fork (source of PR #10) |
+| `noahotim/sues` | `fix/vote-roster-eligibility` | Fork — primary development repo |
 | `noahotim/sues-deploy` | `main` | Deployment copy |
 
 ---
