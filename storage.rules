@@ -5,17 +5,23 @@ service firebase.storage {
     function isAuthenticated() {
       return request.auth != null;
     }
-    
-    function hasRole(role) {
-      return isAuthenticated() && request.auth.token.role == role;
-    }
-    
-    function isElectionManager() {
-      return hasRole('ROLE_ADMINISTRATOR') || hasRole('ROLE_CHAIRPERSON') || hasRole('ROLE_SECRETARY');
+
+    // Roles are stored in Firestore users/{uid}.role (NOT custom claims, which
+    // this app never sets). Read the live role from Firestore so authorization
+    // is accurate and takes effect immediately.
+    function myRole() {
+      return isAuthenticated() && firestore.exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? firestore.get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : '';
     }
 
-    // Candidate photos only. Reads are authenticated; only election managers
-    // (Administrator/Chair/Secretary) may upload/delete images.
+    function isElectionManager() {
+      return myRole() == 'ROLE_ADMINISTRATOR' || myRole() == 'ROLE_CHAIRPERSON' || myRole() == 'ROLE_SECRETARY';
+    }
+
+    // Candidate photos only. Reads restricted to any authenticated user (the
+    // photos are semi-public candidate headshots); uploads/deletes are
+    // election-manager only. Ensures it's an image and reasonable size (< 5MB).
     match /candidate-photos/{fileName} {
       allow read: if isAuthenticated();
       allow write: if isElectionManager()

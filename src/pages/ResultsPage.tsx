@@ -195,6 +195,16 @@ export default function ResultsPage() {
     const width = doc.internal.pageSize.getWidth();
     let y = margin;
 
+    // Full-width navy header band (stretched edge-to-edge, no side margins) with
+    // a gold accent stripe, matching the official SUES electoral branding. The
+    // band runs from x=0 to the full page width so the colour fills the page.
+    const bandH = 40;
+    doc.setFillColor(11, 26, 44);
+    doc.rect(0, 0, width, bandH, "F");
+    doc.setFillColor(201, 162, 39);
+    doc.rect(0, 0, width, 2.5, "F");
+    doc.setTextColor(255, 255, 255);
+
     // Logo
     try {
       const img = await fetch("/sues-logo.jpg").then((r) => r.blob());
@@ -203,18 +213,27 @@ export default function ResultsPage() {
         reader.onload = () => res(String(reader.result));
         reader.readAsDataURL(img);
       });
-      doc.addImage(dataUrl, "JPEG", margin, y - 2, 16, 16);
-      doc.text("SUES", margin + 22, y + 4);
+      doc.addImage(dataUrl, "JPEG", margin, y - 2, 18, 18);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("SUES", margin + 24, y + 5);
+      doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
-      doc.setTextColor(100);
-      doc.text("Soroti University Engineering Society", margin + 22, y + 10);
-      doc.setTextColor(0);
+      doc.setTextColor(203, 213, 225);
+      doc.text("Soroti University Engineering Society", margin + 24, y + 11);
+      doc.setTextColor(255, 255, 255);
     } catch {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
       doc.text("SUES Elections", margin, y + 6);
     }
-    doc.setFontSize(18);
-    doc.text("Official Election Results", margin, y + 26);
-    y += 34;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(19);
+    doc.setTextColor(255, 255, 255);
+    doc.text("Official Election Results", margin, bandH - 10);
+    doc.setTextColor(0);
+    doc.setFont("helvetica", "normal");
+    y = bandH + 18;
 
     doc.setFontSize(12);
     doc.text("Election: " + selectedElection.title, margin, y);
